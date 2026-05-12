@@ -16,13 +16,6 @@ pub struct AppSettings {
 }
 
 impl AppSettings {
-    fn default() -> Self {
-        Self {
-            ender_char: "!".to_string(),
-            theme_color: "#8b5cf6".to_string(),
-        }
-    }
-
     fn load(path: &PathBuf) -> Self {
         if let Ok(Ok(s)) = fs::read_to_string(path).map(|content| serde_json::from_str(&content)) {
             s
@@ -38,6 +31,15 @@ impl AppSettings {
         }
         fs::write(path, content).map_err(|e| e.to_string())?;
         Ok(())
+    }
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            ender_char: "!".to_string(),
+            theme_color: "#8b5cf6".to_string(),
+        }
     }
 }
 
