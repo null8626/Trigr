@@ -1,9 +1,6 @@
 use crate::trigger::Trigger;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, RwLock}};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Package {

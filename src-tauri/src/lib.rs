@@ -5,14 +5,9 @@ mod settings;
 mod trigger;
 
 use package::PackageManager;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::{fs, path::PathBuf, sync::{Arc, Mutex}};
 use tauri::{menu::Menu, tray::TrayIconBuilder, Manager, State};
-use trigger::GlobalVar;
-use trigger::TriggerManager;
-use trigger::TriggerVar;
+use trigger::{GlobalVar, TriggerManager, TriggerVar};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AppSettings {

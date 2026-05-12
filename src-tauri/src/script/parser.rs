@@ -1,5 +1,4 @@
-use crate::script::lexer::{Token, TokenKind};
-use crate::script::ast::*;
+use crate::script::{lexer::{Token, TokenKind}, ast::*};
 
 pub struct Parser {
     tokens: Vec<Token>,
