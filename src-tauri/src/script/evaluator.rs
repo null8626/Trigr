@@ -358,7 +358,7 @@ impl Evaluator {
                     ' '
                 };
                 let pad_len = target.saturating_sub(s.chars().count());
-                let padding: String = std::iter::repeat(ch).take(pad_len).collect();
+                let padding: String = std::iter::repeat_n(ch, pad_len).collect();
                 Ok(Value::Str(format!("{padding}{s}")))
             }
             "pad_end" => {
@@ -373,7 +373,7 @@ impl Evaluator {
                     ' '
                 };
                 let pad_len = target.saturating_sub(s.chars().count());
-                let padding: String = std::iter::repeat(ch).take(pad_len).collect();
+                let padding: String = std::iter::repeat_n(ch, pad_len).collect();
                 Ok(Value::Str(format!("{s}{padding}")))
             }
             "concat" => {
@@ -523,7 +523,7 @@ impl Evaluator {
                 let mut results = vec![];
                 for item in &items {
                     self.env.insert("__item".to_string(), item.clone());
-                    let result = self.call_builtin(&fn_name, &[item.clone()])?;
+                    let result = self.call_builtin(&fn_name, std::slice::from_ref(item))?;
                     results.push(result);
                     self.env.remove("__item");
                 }
@@ -541,7 +541,7 @@ impl Evaluator {
                 let mut results = vec![];
                 for item in &items {
                     self.env.insert("__item".to_string(), item.clone());
-                    let cond = self.call_builtin(&cond_fn, &[item.clone()])?;
+                    let cond = self.call_builtin(&cond_fn, std::slice::from_ref(item))?;
                     if cond.as_bool() {
                         results.push(item.clone());
                     }
@@ -554,7 +554,7 @@ impl Evaluator {
                     Some(Value::List(items)) => items.clone(),
                     _ => return Err("sort requires a list".to_string()),
                 };
-                items.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+                items.sort_by_key(|a| a.to_string());
                 Ok(Value::List(items))
             }
             "join_list" => {

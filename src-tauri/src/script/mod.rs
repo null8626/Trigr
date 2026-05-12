@@ -61,15 +61,13 @@ pub fn resolve_template(template: &str, context: &HashMap<String, String>) -> Re
 
         while let Some(ch) = chars.next() {
             if !in_var {
-                if ch == '{' {
-                    if chars.peek() == Some(&'{') {
-                        chars.next();
-                        in_var = true;
-                        brace_depth = 0;
-                        var_content.clear();
-                        changed = true;
-                        continue;
-                    }
+                if ch == '{' && chars.peek() == Some(&'{') {
+                    chars.next();
+                    in_var = true;
+                    brace_depth = 0;
+                    var_content.clear();
+                    changed = true;
+                    continue;
                 }
                 new_result.push(ch);
             } else {
