@@ -166,7 +166,7 @@ impl Lexer {
             '\'' => return Ok(Some(self.read_char_literal()?)),
             c if c.is_ascii_digit() => return Ok(Some(self.read_number(c))),
             c if c.is_alphabetic() || c == '_' => return Ok(Some(self.read_ident(c))),
-            _ => return Err(format!("Unexpected character '{}' at line {}", ch, self.line)),
+            _ => return Err(format!("Unexpected character '{ch}' at line {}", self.line)),
         }
     }
 

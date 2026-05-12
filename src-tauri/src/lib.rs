@@ -205,7 +205,7 @@ fn preview_replacement(
 fn evaluate_script(source: String, context: std::collections::HashMap<String, String>) -> String {
     match script::evaluate(&source, &context) {
         Ok(result) => result,
-        Err(e) => format!("Error: {}", e),
+        Err(e) => format!("Error: {e}"),
     }
 }
 
@@ -217,7 +217,7 @@ fn preview_script(source: String) -> String {
     context.insert("count".to_string(), "42".to_string());
     match script::evaluate(&source, &context) {
         Ok(result) => result,
-        Err(e) => format!("Error: {}", e),
+        Err(e) => format!("Error: {e}"),
     }
 }
 
@@ -240,7 +240,7 @@ fn export_data(manager: State<Mutex<TriggerManager>>) -> Result<String, String> 
 #[tauri::command]
 fn import_data(manager: State<Mutex<TriggerManager>>, json: String) -> Result<String, String> {
     let data: ExportData =
-        serde_json::from_str(&json).map_err(|e| format!("Invalid format: {}", e))?;
+        serde_json::from_str(&json).map_err(|e| format!("Invalid format: {e}"))?;
     let m = manager.lock().unwrap();
 
     let trigger_count = data.triggers.len();
@@ -260,8 +260,7 @@ fn import_data(manager: State<Mutex<TriggerManager>>, json: String) -> Result<St
     }
 
     Ok(format!(
-        "Imported {} triggers and {} global variables",
-        trigger_count, gv_count
+        "Imported {trigger_count} triggers and {gv_count} global variables"
     ))
 }
 

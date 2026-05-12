@@ -20,7 +20,7 @@ impl Evaluator {
                 self.env
                     .get(name)
                     .cloned()
-                    .ok_or_else(|| format!("Undefined variable: {}", name))
+                    .ok_or_else(|| format!("Undefined variable: {name}"))
             }
             Expr::Binary { left, op, right } => self.eval_binary(left, op, right),
             Expr::Unary { op, expr } => self.eval_unary(op, expr),
@@ -45,7 +45,7 @@ impl Evaluator {
             }
             Expr::Fn { params, body } => Ok(Value::Map(HashMap::from([
                 ("__fn_params".to_string(), Value::List(params.iter().map(|p| Value::Str(p.clone())).collect())),
-                ("__fn_body".to_string(), Value::Str(format!("{:?}", body))),
+                ("__fn_body".to_string(), Value::Str(format!("{body:?}"))),
             ]))),
             Expr::Pipe { left, right } => {
                 let left_val = self.evaluate(left)?;
@@ -90,15 +90,15 @@ impl Evaluator {
                 if let (Value::Num(a), Value::Num(b)) = (&l, &r) {
                     Ok(Value::Num(a + b))
                 } else if let (Value::Str(a), Value::Str(b)) = (&l, &r) {
-                    Ok(Value::Str(format!("{}{}", a, b)))
+                    Ok(Value::Str(format!("{a}{b}")))
                 } else if let (Value::Str(a), _) = (&l, &r) {
-                    Ok(Value::Str(format!("{}{}", a, r.to_string())))
+                    Ok(Value::Str(format!("{a}{}", r.to_string())))
                 } else if let (_, Value::Str(b)) = (&l, &r) {
-                    Ok(Value::Str(format!("{}{}", l.to_string(), b)))
+                    Ok(Value::Str(format!("{}{b}", l.to_string())))
                 } else if let (Value::Num(a), Value::Str(b)) = (&l, &r) {
-                    Ok(Value::Str(format!("{}{}", a, b)))
+                    Ok(Value::Str(format!("{a}{b}")))
                 } else {
-                    Err(format!("Cannot add {:?} and {:?}", l, r))
+                    Err(format!("Cannot add {l:?} and {r:?}"))
                 }
             }
             BinaryOp::Sub => {
@@ -210,7 +210,7 @@ impl Evaluator {
                 } else {
                     n as usize
                 };
-                items.get(idx).cloned().ok_or_else(|| format!("Index {} out of bounds", n))
+                items.get(idx).cloned().ok_or_else(|| format!("Index {n} out of bounds"))
             }
             (Value::Str(s), Value::Num(n)) => {
                 let chars: Vec<char> = s.chars().collect();
@@ -219,10 +219,10 @@ impl Evaluator {
                 } else {
                     n as usize
                 };
-                chars.get(idx).map(|c| Value::Str(c.to_string())).ok_or_else(|| format!("Index {} out of bounds", n))
+                chars.get(idx).map(|c| Value::Str(c.to_string())).ok_or_else(|| format!("Index {n} out of bounds"))
             }
             (Value::Map(map), Value::Str(key)) => {
-                map.get(&key).cloned().ok_or_else(|| format!("Key '{}' not found", key))
+                map.get(&key).cloned().ok_or_else(|| format!("Key '{key}' not found"))
             }
             _ => Err("Cannot index this type".to_string()),
         }
@@ -368,7 +368,7 @@ impl Evaluator {
                 };
                 let pad_len = target.saturating_sub(s.chars().count());
                 let padding: String = std::iter::repeat(ch).take(pad_len).collect();
-                Ok(Value::Str(format!("{}{}", padding, s)))
+                Ok(Value::Str(format!("{padding}{s}")))
             }
             "pad_end" => {
                 if args.len() < 2 {
@@ -383,7 +383,7 @@ impl Evaluator {
                 };
                 let pad_len = target.saturating_sub(s.chars().count());
                 let padding: String = std::iter::repeat(ch).take(pad_len).collect();
-                Ok(Value::Str(format!("{}{}", s, padding)))
+                Ok(Value::Str(format!("{s}{padding}")))
             }
             "concat" => {
                 let parts: Vec<String> = args.iter().map(|v| v.to_string()).collect();
@@ -408,7 +408,7 @@ impl Evaluator {
             }
             "to_num" | "number" => {
                 let s = args.first().map(|v| v.to_string()).unwrap_or_default();
-                let n: f64 = s.parse().map_err(|_| format!("Cannot convert '{}' to number", s))?;
+                let n: f64 = s.parse().map_err(|_| format!("Cannot convert '{s}' to number"))?;
                 Ok(Value::Num(n))
             }
             "to_str" | "string" => {
@@ -610,7 +610,7 @@ impl Evaluator {
                 if let Ok(dt) = chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
                     Ok(Value::Str(dt.format(&fmt).to_string()))
                 } else {
-                    Err(format!("Cannot parse date: {}", s))
+                    Err(format!("Cannot parse date: {s}"))
                 }
             }
             "if_then_else" => {
@@ -633,7 +633,7 @@ impl Evaluator {
                 if let Some(v) = self.env.get(name) {
                     Ok(v.clone())
                 } else {
-                    Ok(Value::Str(format!("{{{{{}}}}}", name)))
+                    Ok(Value::Str(format!("{{{{{name}}}}}")))
                 }
             }
         }

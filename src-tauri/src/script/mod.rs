@@ -82,7 +82,7 @@ pub fn resolve_template(template: &str, context: &HashMap<String, String>) -> Re
                             chars.next();
                             match evaluate(&var_content, context) {
                                 Ok(value) => new_result.push_str(&value),
-                                Err(e) => new_result.push_str(&format!("{{{{{} Error: {}}}}}", var_content, e)),
+                                Err(e) => new_result.push_str(&format!("{{{{{var_content} Error: {e}}}}}")),
                             }
                             in_var = false;
                             continue;

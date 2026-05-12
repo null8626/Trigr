@@ -302,7 +302,7 @@ impl TriggerManager {
         }
 
         for (name, value) in &var_values {
-            let placeholder = format!("{{{{{}}}}}", name);
+            let placeholder = format!("{{{{{name}}}}}");
             result = result.replace(&placeholder, value);
         }
 
@@ -355,7 +355,7 @@ fn resolve_qlang_expressions(
                 let trimmed = expr.trim();
                 let val = evaluate_script_with_args(trimmed, context, args);
                 if val == "{{script error}}" {
-                    result.push_str(&format!("{{{{{}}}}}", expr));
+                    result.push_str(&format!("{{{{{expr}}}}}"));
                 } else {
                     result.push_str(&val);
                 }
@@ -383,7 +383,7 @@ fn evaluate_script_with_args(
     let mut ctx = context.clone();
 
     for (i, arg) in args.iter().enumerate() {
-        ctx.insert(format!("_arg_{}", i), arg.clone());
+        ctx.insert(format!("_arg_{i}"), arg.clone());
     }
     ctx.insert("_args_len".to_string(), args.len().to_string());
 

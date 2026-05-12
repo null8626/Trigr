@@ -87,7 +87,7 @@ impl Value {
                 if n.fract() == 0.0 && n.abs() < 1e15 {
                     format!("{}", *n as i64)
                 } else {
-                    format!("{}", n)
+                    format!("{n}")
                 }
             }
             Value::Str(s) => s.clone(),

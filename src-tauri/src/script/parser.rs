@@ -276,7 +276,7 @@ impl Parser {
 
         if self.match_token(&TokenKind::Number) {
             let lexeme = self.tokens[self.pos - 1].lexeme.clone();
-            let n: f64 = lexeme.parse().map_err(|e| format!("Invalid number: {}", e))?;
+            let n: f64 = lexeme.parse().map_err(|e| format!("Invalid number: {e}"))?;
             return Ok(Expr::Literal(Value::Num(n)));
         }
 
@@ -365,7 +365,7 @@ impl Parser {
             Ok(self.advance())
         } else {
             let token = self.peek();
-            Err(format!("Expected {}: found '{:?}' at line {}", message, token.kind, token.line))
+            Err(format!("Expected {message}: found '{:?}' at line {}", token.kind, token.line))
         }
     }
 
