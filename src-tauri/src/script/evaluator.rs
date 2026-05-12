@@ -127,32 +127,32 @@ impl Evaluator {
             BinaryOp::Eq => Ok(Value::Bool(self.values_equal(&l, &r))),
             BinaryOp::Ne => Ok(Value::Bool(!self.values_equal(&l, &r))),
             BinaryOp::Lt => {
-                if let (Value::Num(a), Value::Num(b)) = (&l, &r) {
-                    Ok(Value::Bool(a < b))
+                Ok(Value::Bool(if let (Value::Num(a), Value::Num(b)) = (&l, &r) {
+                    a < b
                 } else {
-                    Ok(Value::Bool(l.to_string() < r.to_string()))
-                }
+                    l.to_string() < r.to_string()
+                }))
             }
             BinaryOp::Gt => {
-                if let (Value::Num(a), Value::Num(b)) = (&l, &r) {
-                    Ok(Value::Bool(a > b))
+                Ok(Value::Bool(if let (Value::Num(a), Value::Num(b)) = (&l, &r) {
+                    a > b
                 } else {
-                    Ok(Value::Bool(l.to_string() > r.to_string()))
-                }
+                    l.to_string() > r.to_string()
+                }))
             }
             BinaryOp::Le => {
-                if let (Value::Num(a), Value::Num(b)) = (&l, &r) {
-                    Ok(Value::Bool(a <= b))
+                Ok(Value::Bool(if let (Value::Num(a), Value::Num(b)) = (&l, &r) {
+                    a <= b
                 } else {
-                    Ok(Value::Bool(l.to_string() <= r.to_string()))
-                }
+                    l.to_string() <= r.to_string()
+                }))
             }
             BinaryOp::Ge => {
-                if let (Value::Num(a), Value::Num(b)) = (&l, &r) {
-                    Ok(Value::Bool(a >= b))
+                Ok(Value::Bool(if let (Value::Num(a), Value::Num(b)) = (&l, &r) {
+                    a >= b
                 } else {
-                    Ok(Value::Bool(l.to_string() >= r.to_string()))
-                }
+                    l.to_string() >= r.to_string()
+                }))
             }
         }
     }
@@ -583,14 +583,15 @@ impl Evaluator {
                 }
                 let s = args[0].to_string();
                 let days = args[1].as_num().ok_or("Days must be a number")? as i64;
-                if let Ok(dt) = chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
+
+                Ok(Value::Str(if let Ok(dt) = chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
                     let new_date = dt + chrono::Duration::days(days);
-                    Ok(Value::Str(new_date.format("%Y-%m-%d").to_string()))
+                    new_date.format("%Y-%m-%d").to_string()
                 } else {
                     let dt = chrono::Local::now().date_naive();
                     let new_date = dt + chrono::Duration::days(days);
-                    Ok(Value::Str(new_date.format(&s).to_string()))
-                }
+                    new_date.format(&s).to_string()
+                }))
             }
             "date_format" => {
                 if args.len() < 2 {
@@ -621,11 +622,11 @@ impl Evaluator {
                 Ok(Value::Bool(args.iter().all(|v| v.as_bool())))
             }
             _ => {
-                if let Some(v) = self.env.get(name) {
-                    Ok(v.clone())
+                Ok(if let Some(v) = self.env.get(name) {
+                    v.clone()
                 } else {
-                    Ok(Value::Str(format!("{{{{{name}}}}}")))
-                }
+                    Value::Str(format!("{{{{{name}}}}}"))
+                })
             }
         }
     }

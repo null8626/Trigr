@@ -25,15 +25,15 @@ pub fn evaluate_with_args(source: &str, context: &HashMap<String, String>, args:
     let mut evaluator = Evaluator::new();
 
     for (key, value) in context {
-        if key == "_args_len" {
-            if let Ok(n) = value.parse::<f64>() {
-                evaluator.env.insert(key.clone(), Value::Num(n));
-            } else {
-                evaluator.env.insert(key.clone(), Value::Str(value.clone()));
-            }
+        evaluator.env.insert(key.clone(), if key == "_args_len" {
+            Value::Str(value.clone())
         } else {
-            evaluator.env.insert(key.clone(), Value::Str(value.clone()));
-        }
+            if let Ok(n) = value.parse::<f64>() {
+                Value::Num(n)
+            } else {
+                Value::Str(value.clone())
+            }
+        });
     }
 
     let args_values: Vec<Value> = args.iter().map(|a| Value::Str(a.clone())).collect();
