@@ -2,17 +2,12 @@ use crate::script::ast::*;
 pub use crate::script::ast::Value;
 use std::collections::HashMap;
 
+#[derive(Default)]
 pub struct Evaluator {
     pub env: HashMap<String, Value>,
 }
 
 impl Evaluator {
-    pub fn new() -> Self {
-        Self {
-            env: HashMap::new(),
-        }
-    }
-
     pub fn evaluate(&mut self, expr: &Expr) -> Result<Value, String> {
         match expr {
             Expr::Literal(v) => Ok(v.clone()),

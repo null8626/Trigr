@@ -22,7 +22,7 @@ pub fn evaluate(source: &str, context: &HashMap<String, String>) -> Result<Strin
 
 pub fn evaluate_with_args(source: &str, context: &HashMap<String, String>, args: &[String]) -> Result<String, String> {
     let expr = parse(source)?;
-    let mut evaluator = Evaluator::new();
+    let mut evaluator = Evaluator::default();
 
     for (key, value) in context {
         evaluator.env.insert(key.clone(), if key == "_args_len" {

@@ -51,7 +51,7 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, lexeme: String, line: usize) -> Self {
+    pub const fn new(kind: TokenKind, lexeme: String, line: usize) -> Self {
         Self { kind, lexeme, line }
     }
 }

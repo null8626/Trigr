@@ -81,7 +81,7 @@ struct TriggerExport {
 
 impl From<trigger::Trigger> for TriggerExport {
     fn from(t: trigger::Trigger) -> Self {
-        TriggerExport {
+        Self {
             id: t.id,
             trigger_text: t.trigger_text,
             replacement: t.replacement,
