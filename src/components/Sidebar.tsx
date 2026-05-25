@@ -22,7 +22,7 @@ export function Sidebar() {
   const [updateState, setUpdateState] = useState<"idle" | "downloading" | "error">("idle");
 
   useEffect(() => {
-    check().then((u) => setUpdate(u)).catch(() => {});
+    check().then((u) => setUpdate(u)).catch(() => setUpdateState("error"));
   }, []);
 
   async function handleUpdate() {

@@ -3,6 +3,7 @@ import { Keyboard, Palette, Check, Minus, Plus, ChevronDown, RefreshCw, Download
 import { BlossomColorPicker } from "@dayflow/blossom-color-picker-react";
 import "../blossom-color-picker.css";
 import { check, Update } from "@tauri-apps/plugin-updater";
+import { getVersion } from "@tauri-apps/api/app";
 import { applyThemeColors, hexToBlossom } from "../utils/color";
 import { t, languages } from "../i18n";
 import { useStore } from "../store";
@@ -22,7 +23,11 @@ export function SettingsView() {
 
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "available" | "uptodate" | "downloading" | "error">("idle");
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
-  const currentVersion = "0.1.3";
+  const [currentVersion, setCurrentVersion] = useState("");
+
+  useEffect(() => {
+    getVersion().then(setCurrentVersion).catch(() => setCurrentVersion("0.1.4"));
+  }, []);
 
   async function checkForUpdates() {
     setUpdateStatus("checking");

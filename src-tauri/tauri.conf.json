@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "trigr",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "identifier": "com.rubik.trigr",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -45,7 +45,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVGOTBGRTRFMDYzMUJGRgpSV1QvRzJQZzVBLzVEaDJnVFcvYmY2VXNYQzlUYklZQURpT2QvUmhZZ0gyS090MVNYTWxxQXhFWQo=",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM5M0Y0REZBNDQ4MTg4M0UKUldRK2lJRkUrazAveVhJdmR1SFJZRzBadXpHczQ3Y00yaWk2K0VZRE5OcC9pZW5ldFpIcG9haTMK",
       "endpoints": [
         "https://trigr.pancake.wtf/updates.json"
       ],
