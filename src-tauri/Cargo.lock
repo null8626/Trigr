@@ -4542,6 +4542,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

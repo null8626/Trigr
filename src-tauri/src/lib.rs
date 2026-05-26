@@ -5,9 +5,10 @@ mod settings;
 mod trigger;
 
 use package::PackageManager;
-use std::{fs, path::PathBuf, sync::{Arc, Mutex}};
+use std::{ffi::CString, fs, path::PathBuf, ptr::null_mut, sync::{Arc, Mutex}};
 use tauri::{menu::Menu, tray::TrayIconBuilder, Manager, State};
 use trigger::{GlobalVar, TriggerManager, TriggerVar};
+use windows_sys::Win32::{Foundation::ERROR_SUCCESS, System::Registry::{HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ, RegCloseKey, RegCreateKeyExA, RegSetValueExA}};
 
 const SETTINGS_FILENAME: &str = "settings.json";
 const PACKAGES_RELATIVE_DIR: &str = "src/packages";
@@ -50,22 +51,19 @@ impl Default for AppSettings {
     }
 }
 
-const AUTOSTART_REGISTRY_PATH: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
-
 fn enable_autostart() {
     let Ok(exe) = std::env::current_exe() else { return };
-    let path = exe.to_string_lossy();
-    let _ = std::process::Command::new("reg")
-        .args([
-            "add",
-            AUTOSTART_REGISTRY_PATH,
-            "/v",
-            "trigr",
-            "/d",
-            &*path,
-            "/f",
-        ])
-        .output();
+    let exe_str = exe.to_string_lossy();
+    let Ok(exe_cstr) = CString::new(&*exe_str) else { return };
+
+    let mut key = null_mut();
+
+    unsafe {
+        if RegCreateKeyExA(HKEY_CURRENT_USER, cr"Software\Microsoft\Windows\CurrentVersion\Run".as_ptr() as _, 0, 0 as _, 0, KEY_SET_VALUE, 0 as _, &mut key as _, 0 as _) == ERROR_SUCCESS {
+            RegSetValueExA(key, c"trigr".as_ptr() as _, 0, REG_SZ, exe_cstr.as_ptr() as _, (exe_cstr.count_bytes() + 1) as _);
+            RegCloseKey(key);
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
