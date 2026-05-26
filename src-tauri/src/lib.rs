@@ -53,8 +53,8 @@ impl Default for AppSettings {
 
 fn enable_autostart() {
     let Ok(exe) = std::env::current_exe() else { return };
-    let exe_str = exe.to_string_lossy();
-    let Ok(exe_cstr) = CString::new(&*exe_str) else { return };
+    let exe_path_with_arg = format!(r#""{}" --autostart"#, exe.display());
+    let Ok(exe_cstr) = CString::new(exe_path_with_arg) else { return };
 
     let mut key = null_mut();
 
@@ -422,6 +422,7 @@ pub fn run() {
 
             let _ = TrayIconBuilder::new()
                 .icon(tauri::include_image!("icons/64x64.png"))
+                .tooltip("trigr")
                 .menu(&menu)
                 .on_menu_event(move |app, event| match event.id.as_ref() {
                     "show" => {
