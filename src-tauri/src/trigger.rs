@@ -189,7 +189,7 @@ tauri_reexport! {
         ) -> Result<Trigger, String> {
             let now = chrono::Utc::now().to_rfc3339();
             let trigger = Trigger {
-                id: uuid::Uuid::new_v4().to_string(),
+                id: Uuid::new_v4().to_string(),
                 trigger_text,
                 replacement,
                 enabled: true,
@@ -246,7 +246,7 @@ tauri_reexport! {
 
         pub fn add_global_var(self: &Self, name: String, script: String) -> Result<GlobalVar, Cow<'static, str>> {
             let global_var = GlobalVar {
-                id: uuid::Uuid::new_v4(),
+                id: Uuid::new_v4(),
                 name,
                 script,
                 enabled: true,
