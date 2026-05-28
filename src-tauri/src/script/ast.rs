@@ -109,7 +109,7 @@ impl Value<'_> {
             Self::Num(n) => *n != 0.0,
             Self::Str(s) => match s {
                 Cow::Borrowed(s) => !s.is_empty(),
-                Cow::Owned(s) => s.len() != 0,
+                Cow::Owned(s) => !s.is_empty(),
             },
             Self::Nil => false,
             Self::Fn { .. } => true,

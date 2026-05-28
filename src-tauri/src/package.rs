@@ -132,25 +132,25 @@ tauri_reexport! {
             self.state.read().unwrap().installed.clone()
         }
 
-        pub fn install_package(self: &Self, id: String) -> Result<(), String> {
+        pub fn install_package(self: &Self, id: String) -> Result<(), Cow<'static, str>> {
             {
                 let mut state = self.state.write().map_err(|e| e.to_string())?;
                 if !self.get_available_packages().iter().any(|p| p.id == id) {
-                    return Err("Package not found".to_string());
+                    return Err("Package not found".into());
                 }
                 if state.installed.contains(&id) {
-                    return Err("Package already installed".to_string());
+                    return Err("Package already installed".into());
                 }
                 state.installed.push(id);
             }
             self.save()
         }
 
-        pub fn uninstall_package(self: &Self, id: String) -> Result<(), String> {
+        pub fn uninstall_package(self: &Self, id: String) -> Result<(), Cow<'static, str>> {
             {
                 let mut state = self.state.write().map_err(|e| e.to_string())?;
                 if !state.installed.contains(&id) {
-                    return Err("Package not installed".to_string());
+                    return Err("Package not installed".into());
                 }
                 state.installed.retain(|p| p != &id);
             }

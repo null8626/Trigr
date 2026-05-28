@@ -244,9 +244,9 @@ tauri_reexport! {
             self.global_vars.read().unwrap().clone()
         }
 
-        pub fn add_global_var(self: &Self, name: String, script: String) -> Result<GlobalVar, String> {
+        pub fn add_global_var(self: &Self, name: String, script: String) -> Result<GlobalVar, Cow<'static, str>> {
             let global_var = GlobalVar {
-                id: uuid::Uuid::new_v4().to_string(),
+                id: uuid::Uuid::new_v4(),
                 name,
                 script,
                 enabled: true,
@@ -261,28 +261,26 @@ tauri_reexport! {
 
         pub fn update_global_var(
             self: &Self,
-            id: String,
+            id: Uuid,
             name: Option<String>,
             script: Option<String>,
             enabled: Option<bool>
-        ) -> Result<GlobalVar, String> {
-            {
-                let mut global_vars = self.global_vars.write().map_err(|e| e.to_string())?;
-                let gv = global_vars
-                    .iter_mut()
-                    .find(|g| g.id == id)
-                    .ok_or_else(|| "Global variable not found".to_string())?;
+        ) -> Result<GlobalVar, Cow<'static, str>> {
+            let mut global_vars = self.global_vars.write().map_err(|e| e.to_string())?;
+            let gv = global_vars
+                .iter_mut()
+                .find(|g| g.id == id)
+                .ok_or(Cow::Borrowed("Global variable not found"))?;
 
-                if let Some(v) = name { gv.name = v; }
-                if let Some(v) = script { gv.script = v; }
-                if let Some(v) = enabled { gv.enabled = v; }
+            if let Some(v) = name { gv.name = v; }
+            if let Some(v) = script { gv.script = v; }
+            if let Some(v) = enabled { gv.enabled = v; }
 
-                Ok(gv.clone())
-            }
-            .and_then(|gv| {
-                self.save_global_vars()?;
-                Ok(gv)
-            })
+            let result = Ok(gv.clone());
+
+            self.save_global_vars()?;
+
+            result
         }
     }
 }
