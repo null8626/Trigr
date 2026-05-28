@@ -1,62 +1,62 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub enum Expr {
-    Literal(Value),
-    Var(String),
+pub enum Expr<'e> {
+    Literal(Value<'e>),
+    Var(Cow<'e, str>),
     Binary {
-        left: Box<Expr>,
+        left: Box<Expr<'e>>,
         op: BinaryOp,
-        right: Box<Expr>,
+        right: Box<Expr<'e>>,
     },
     Unary {
         op: UnaryOp,
-        expr: Box<Expr>,
+        expr: Box<Expr<'e>>,
     },
     Call {
-        callee: Box<Expr>,
-        args: Vec<Expr>,
+        callee: Box<Expr<'e>>,
+        args: Vec<Expr<'e>>,
     },
     Index {
-        target: Box<Expr>,
-        index: Box<Expr>,
+        target: Box<Expr<'e>>,
+        index: Box<Expr<'e>>,
     },
     DotAccess {
-        target: Box<Expr>,
-        field: String,
+        target: Box<Expr<'e>>,
+        field: Cow<'e, str>,
     },
     If {
-        condition: Box<Expr>,
-        then_branch: Box<Expr>,
-        else_branch: Option<Box<Expr>>,
+        condition: Box<Expr<'e>>,
+        then_branch: Box<Expr<'e>>,
+        else_branch: Option<Box<Expr<'e>>>,
     },
     ForLoop {
-        var_name: String,
-        iterable: Box<Expr>,
-        body: Box<Expr>,
+        var_name: Cow<'e, str>,
+        iterable: Box<Expr<'e>>,
+        body: Box<Expr<'e>>,
     },
     Let {
-        name: String,
-        value: Box<Expr>,
-        body: Box<Expr>,
+        name: Cow<'e, str>,
+        value: Box<Expr<'e>>,
+        body: Box<Expr<'e>>,
     },
     Fn {
-        params: Vec<String>,
-        body: Box<Expr>,
+        params: Vec<Cow<'e, str>>,
+        body: Box<Expr<'e>>,
     },
     Pipe {
-        left: Box<Expr>,
-        right: Box<Expr>,
+        left: Box<Expr<'e>>,
+        right: Box<Expr<'e>>,
     },
     Match {
-        value: Box<Expr>,
-        arms: Vec<(Value, Box<Expr>)>,
-        default: Option<Box<Expr>>,
+        value: Box<Expr<'e>>,
+        arms: Vec<(Value<'e>, Box<Expr<'e>>)>,
+        default: Option<Box<Expr<'e>>>,
     },
-    Object(Vec<(String, Expr)>),
-    Block(Vec<Expr>),
-    List(Vec<Expr>),
+    Object(Vec<(Cow<'e, str>, Expr<'e>)>),
+    Block(Vec<Expr<'e>>),
+    List(Vec<Expr<'e>>),
 }
 
 #[derive(Debug, Clone)]
@@ -81,20 +81,20 @@ pub enum UnaryOp {
 }
 
 #[derive(Debug, Clone)]
-pub enum Value {
+pub enum Value<'v> {
     Num(f64),
-    Str(String),
+    Str(Cow<'v, str>),
     Bool(bool),
     Nil,
-    List(Vec<Value>),
-    Map(HashMap<String, Value>),
+    List(Vec<Value<'v>>),
+    Map(HashMap<Cow<'v, str>, Value<'v>>),
     Fn {
-        params: Vec<String>,
-        body: Box<Expr>,
+        params: Vec<Cow<'v, str>>,
+        body: Box<Expr<'v>>,
     },
 }
 
-impl Value {
+impl Value<'_> {
     pub fn to_string(&self) -> String {
         match self {
             Value::Num(n) => {
@@ -104,11 +104,11 @@ impl Value {
                     format!("{n}")
                 }
             }
-            Value::Str(s) => s.clone(),
+            Value::Str(s) => s.to_string(),
             Value::Bool(b) => b.to_string(),
             Value::Nil => String::new(),
             Value::List(items) => {
-                let strs: Vec<String> = items.iter().map(|v| v.to_string()).collect();
+                let strs = items.iter().map(|v| v.to_string()).collect::<Vec<_>>();
                 strs.join(", ")
             }
             Value::Map(_) => "[map]".to_string(),

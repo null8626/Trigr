@@ -1,6 +1,6 @@
 use crate::trigger::Trigger;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, RwLock}};
+use std::{borrow::Cow, collections::HashMap, fs::{self, File}, io::{BufReader, BufWriter}, path::PathBuf, sync::{Arc, RwLock}};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Package {
@@ -19,25 +19,16 @@ struct PackageMeta {
     pub version: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct PackageFile {
     pub installed: Vec<String>,
 }
 
+#[derive(Clone)]
 pub struct PackageManager {
     file_path: PathBuf,
     packages_dir: PathBuf,
     state: Arc<RwLock<PackageFile>>,
-}
-
-impl Clone for PackageManager {
-    fn clone(&self) -> Self {
-        Self {
-            file_path: self.file_path.clone(),
-            packages_dir: self.packages_dir.clone(),
-            state: self.state.clone(),
-        }
-    }
 }
 
 const PACKAGES_FILENAME: &str = "packages.json";
@@ -56,16 +47,13 @@ impl PackageManager {
     }
 
     fn load_or_create(path: &PathBuf) -> PackageFile {
-        fs::read_to_string(path)
-            .ok()
-            .and_then(|content| serde_json::from_str(&content).ok())
-            .unwrap_or_else(|| PackageFile { installed: vec![] })
+        File::open(path).map_or(None, |file| serde_json::from_reader(BufReader::new(file)).ok()).unwrap_or_default()
     }
 
-    fn save(&self) -> Result<(), String> {
+    fn save(&self) -> Result<(), Cow<'static, str>> {
         let state = self.state.read().map_err(|e| e.to_string())?;
-        let content = serde_json::to_string_pretty(&*state).map_err(|e| e.to_string())?;
-        fs::write(&self.file_path, content).map_err(|e| e.to_string())
+
+        serde_json::to_writer_pretty(BufWriter::new(File::open(&self.file_path).map_err(|e| e.to_string())?), &*state).map_err(|e| e.to_string().into())
     }
 
     pub fn get_available_packages(&self) -> Vec<Package> {
@@ -85,9 +73,9 @@ impl PackageManager {
                     continue;
                 }
                 if let (Ok(meta_content), Ok(triggers_content)) = (
-                    fs::read_to_string(&meta_path),
-                    fs::read_to_string(&triggers_path),
-                ) && let (Ok(meta), Ok(trigger_map)) = (serde_json::from_str::<PackageMeta>(&meta_content), serde_json::from_str::<HashMap<String, String>>(&triggers_content)) {
+                    File::open(&meta_path),
+                    File::open(&triggers_path),
+                ) && let (Ok(meta), Ok(trigger_map)) = (serde_json::from_reader::<_, PackageMeta>(BufReader::new(meta_content)), serde_json::from_reader::<_, HashMap<String, String>>(BufReader::new(triggers_content))) {
                     let triggers = trigger_map
                         .into_iter()
                         .map(|(trigger, replacement)| {
@@ -127,25 +115,25 @@ impl PackageManager {
         self.state.read().unwrap().installed.clone()
     }
 
-    pub fn install_package(&self, id: String) -> Result<(), String> {
+    pub fn install_package(&self, id: String) -> Result<(), Cow<'static, str>> {
         {
             let mut state = self.state.write().map_err(|e| e.to_string())?;
             if !self.get_available_packages().iter().any(|p| p.id == id) {
-                return Err("Package not found".to_string());
+                return Err("Package not found".into());
             }
             if state.installed.contains(&id) {
-                return Err("Package already installed".to_string());
+                return Err("Package already installed".into());
             }
             state.installed.push(id);
         }
         self.save()
     }
 
-    pub fn uninstall_package(&self, id: String) -> Result<(), String> {
+    pub fn uninstall_package(&self, id: String) -> Result<(), Cow<'static, str>> {
         {
             let mut state = self.state.write().map_err(|e| e.to_string())?;
             if !state.installed.contains(&id) {
-                return Err("Package not installed".to_string());
+                return Err("Package not installed".into());
             }
             state.installed.retain(|p| p != &id);
         }
@@ -154,7 +142,7 @@ impl PackageManager {
 
     pub fn get_package_triggers(&self) -> Vec<Trigger> {
         let state = self.state.read().unwrap();
-        let installed_ids: Vec<String> = state.installed.clone();
+        let installed_ids = state.installed.clone();
         drop(state);
 
         let mut triggers = vec![];

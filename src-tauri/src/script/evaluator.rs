@@ -1,21 +1,21 @@
 pub use crate::script::ast::Value;
 use crate::script::ast::*;
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap, slice};
 
 #[derive(Default)]
-pub struct Evaluator {
-    pub env: HashMap<String, Value>,
+pub struct Evaluator<'v> {
+    pub env: HashMap<Cow<'v, str>, Value<'v>>,
 }
 
-impl Evaluator {
-    pub fn evaluate(&mut self, expr: &Expr) -> Result<Value, String> {
+impl<'v> Evaluator<'v> {
+    pub fn evaluate<'e>(&mut self, expr: &'e Expr<'v>) -> Result<Value<'v>, Cow<'static, str>> {
         match expr {
             Expr::Literal(v) => Ok(v.clone()),
             Expr::Var(name) => self
                 .env
                 .get(name)
                 .cloned()
-                .ok_or_else(|| format!("Undefined variable: {name}")),
+                .ok_or_else(|| format!("Undefined variable: {name}").into()),
             Expr::Binary { left, op, right } => self.eval_binary(left, op, right),
             Expr::Unary { op, expr } => self.eval_unary(op, expr),
             Expr::Call { callee, args } => self.eval_call(callee, args),
@@ -26,8 +26,8 @@ impl Evaluator {
                     Value::Map(map) => map
                         .get(field)
                         .cloned()
-                        .ok_or_else(|| format!("Key '{field}' not found")),
-                    _ => Err(format!("Cannot access field '{field}' on non-object")),
+                        .ok_or_else(|| format!("Key '{field}' not found").into()),
+                    _ => Err(format!("Cannot access field '{field}' on non-object").into()),
                 }
             }
             Expr::Match {
@@ -45,10 +45,8 @@ impl Evaluator {
                         break;
                     }
                 }
-                if !matched {
-                    if let Some(def) = default {
-                        result = self.evaluate(def)?;
-                    }
+                if !matched && let Some(def) = default {
+                    result = self.evaluate(def)?;
                 }
                 Ok(result)
             }
@@ -93,23 +91,23 @@ impl Evaluator {
                     if let Expr::Var(name) = callee.as_ref() {
                         self.eval_call_with_values(name, &new_args)
                     } else {
-                        Err("Can only pipe into functions".to_string())
+                        Err("Can only pipe into functions".into())
                     }
                 } else if let Expr::Var(name) = right.as_ref() {
-                    let res = self.call_builtin(name, &[left_val.clone()]);
+                    let res = self.call_builtin(name, slice::from_ref(&left_val));
                     match res {
                         Ok(v) => Ok(v),
                         Err(_) => {
-                            self.env.insert("__pipe_input".to_string(), left_val);
+                            self.env.insert("__pipe_input".into(), left_val);
                             let result = self.evaluate(right)?;
-                            self.env.remove("__pipe_input");
+                            self.env.remove(&Cow::Borrowed("__pipe_input"));
                             Ok(result)
                         }
                     }
                 } else {
-                    self.env.insert("__pipe_input".to_string(), left_val);
+                    self.env.insert("__pipe_input".into(), left_val);
                     let result = self.evaluate(right)?;
-                    self.env.remove("__pipe_input");
+                    self.env.remove(&Cow::Borrowed("__pipe_input"));
                     Ok(result)
                 }
             }
@@ -121,15 +119,14 @@ impl Evaluator {
                 Ok(last)
             }
             Expr::List(items) => {
-                let values: Result<Vec<Value>, String> =
-                    items.iter().map(|e| self.evaluate(e)).collect();
+                let values = items.iter().map(|e| self.evaluate(e)).collect::<Result<_, _>>();
                 Ok(Value::List(values?))
             }
             Expr::ForLoop { .. } => Ok(Value::Nil),
         }
     }
 
-    fn eval_binary(&mut self, left: &Expr, op: &BinaryOp, right: &Expr) -> Result<Value, String> {
+    fn eval_binary<'e>(&mut self, left: &'e Expr<'v>, op: &'e BinaryOp, right: &'e Expr<'v>) -> Result<Value<'v>, Cow<'static, str>> {
         let l = self.evaluate(left)?;
         let r = self.evaluate(right)?;
 
@@ -137,38 +134,38 @@ impl Evaluator {
             BinaryOp::Add => match (&l, &r) {
                 (Value::Num(a), Value::Num(b)) => Ok(Value::Num(a + b)),
 
-                (Value::Str(a), Value::Str(b)) => Ok(Value::Str(format!("{a}{b}"))),
+                (Value::Str(a), Value::Str(b)) => Ok(Value::Str(format!("{a}{b}").into())),
 
-                (Value::Num(a), Value::Str(b)) => Ok(Value::Str(format!("{a}{b}"))),
+                (Value::Num(a), Value::Str(b)) => Ok(Value::Str(format!("{a}{b}").into())),
 
-                (Value::Str(a), _) => Ok(Value::Str(format!("{a}{}", r.to_string()))),
+                (Value::Str(a), _) => Ok(Value::Str(format!("{a}{}", r.to_string()).into())),
 
-                (_, Value::Str(b)) => Ok(Value::Str(format!("{}{b}", l.to_string()))),
+                (_, Value::Str(b)) => Ok(Value::Str(format!("{}{b}", l.to_string()).into())),
 
-                _ => Err(format!("Cannot add {l:?} and {r:?}")),
+                _ => Err(format!("Cannot add {l:?} and {r:?}").into()),
             },
             BinaryOp::Sub => {
-                let a = l.as_num().ok_or("Left side must be a number")?;
-                let b = r.as_num().ok_or("Right side must be a number")?;
+                let a = l.as_num().ok_or(Cow::Borrowed("Left side must be a number"))?;
+                let b = r.as_num().ok_or(Cow::Borrowed("Right side must be a number"))?;
                 Ok(Value::Num(a - b))
             }
             BinaryOp::Mul => {
-                let a = l.as_num().ok_or("Left side must be a number")?;
-                let b = r.as_num().ok_or("Right side must be a number")?;
+                let a = l.as_num().ok_or(Cow::Borrowed("Left side must be a number"))?;
+                let b = r.as_num().ok_or(Cow::Borrowed("Right side must be a number"))?;
                 Ok(Value::Num(a * b))
             }
             BinaryOp::Div => {
-                let a = l.as_num().ok_or("Left side must be a number")?;
-                let b = r.as_num().ok_or("Right side must be a number")?;
+                let a = l.as_num().ok_or(Cow::Borrowed("Left side must be a number"))?;
+                let b = r.as_num().ok_or(Cow::Borrowed("Right side must be a number"))?;
                 if b == 0.0 {
-                    Err("Division by zero".to_string())
+                    Err("Division by zero".into())
                 } else {
                     Ok(Value::Num(a / b))
                 }
             }
             BinaryOp::Mod => {
-                let a = l.as_num().ok_or("Left side must be a number")?;
-                let b = r.as_num().ok_or("Right side must be a number")?;
+                let a = l.as_num().ok_or(Cow::Borrowed("Left side must be a number"))?;
+                let b = r.as_num().ok_or(Cow::Borrowed("Right side must be a number"))?;
                 Ok(Value::Num(a % b))
             }
             BinaryOp::Eq => Ok(Value::Bool(self.values_equal(&l, &r))),
@@ -204,25 +201,25 @@ impl Evaluator {
         }
     }
 
-    fn eval_unary(&mut self, op: &UnaryOp, expr: &Expr) -> Result<Value, String> {
+    fn eval_unary<'e>(&mut self, op: &'e UnaryOp, expr: &'e Expr<'v>) -> Result<Value<'v>, Cow<'static, str>> {
         let v = self.evaluate(expr)?;
         match op {
             UnaryOp::Not => Ok(Value::Bool(!v.as_bool())),
             UnaryOp::Neg => {
-                let n = v.as_num().ok_or("Cannot negate non-number")?;
+                let n = v.as_num().ok_or(Cow::Borrowed("Cannot negate non-number"))?;
                 Ok(Value::Num(-n))
             }
         }
     }
 
-    fn eval_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Value, String> {
+    fn eval_call<'e>(&mut self, callee: &'e Expr<'v>, args: &[Expr<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         let mut arg_values = vec![];
         for a in args {
             arg_values.push(self.evaluate(a)?);
         }
 
         let Expr::Var(func_name) = callee else {
-            return Err("Can only call functions and builtins".to_string());
+            return Err("Can only call functions and builtins".into());
         };
 
         self.call_builtin(func_name, &arg_values)
@@ -231,12 +228,12 @@ impl Evaluator {
     fn eval_call_with_values(
         &mut self,
         func_name: &str,
-        arg_values: &[Value],
-    ) -> Result<Value, String> {
+        arg_values: &[Value<'v>],
+    ) -> Result<Value<'v>, Cow<'static, str>> {
         self.call_builtin(func_name, arg_values)
     }
 
-    fn eval_index(&mut self, target: &Expr, index: &Expr) -> Result<Value, String> {
+    fn eval_index<'e>(&mut self, target: &'e Expr<'v>, index: &'e Expr<'v>) -> Result<Value<'v>, Cow<'static, str>> {
         let t = self.evaluate(target)?;
         let i = self.evaluate(index)?;
 
@@ -250,10 +247,10 @@ impl Evaluator {
                 items
                     .get(idx)
                     .cloned()
-                    .ok_or_else(|| format!("Index {n} out of bounds"))
+                    .ok_or_else(|| format!("Index {n} out of bounds").into())
             }
             (Value::Str(s), Value::Num(n)) => {
-                let chars: Vec<char> = s.chars().collect();
+                let chars = s.chars().collect::<Vec<_>>();
                 let idx = if n < 0.0 {
                     (chars.len() as f64 + n) as usize
                 } else {
@@ -261,18 +258,18 @@ impl Evaluator {
                 };
                 chars
                     .get(idx)
-                    .map(|c| Value::Str(c.to_string()))
-                    .ok_or_else(|| format!("Index {n} out of bounds"))
+                    .map(|c| Value::Str(c.to_string().into()))
+                    .ok_or_else(|| format!("Index {n} out of bounds").into())
             }
             (Value::Map(map), Value::Str(key)) => map
                 .get(&key)
                 .cloned()
-                .ok_or_else(|| format!("Key '{key}' not found")),
-            _ => Err("Cannot index this type".to_string()),
+                .ok_or_else(|| format!("Key '{key}' not found").into()),
+            _ => Err("Cannot index this type".into()),
         }
     }
 
-    fn call_builtin(&mut self, name: &str, args: &[Value]) -> Result<Value, String> {
+    fn call_builtin(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         match name {
             "upper" | "lower" | "trim" | "trim_start" | "trim_end" | "len" | "length"
             | "repeat" | "replace" | "slice" | "split" | "contains" | "starts_with"
@@ -294,122 +291,121 @@ impl Evaluator {
                 .env
                 .get(name)
                 .cloned()
-                .unwrap_or(Value::Str(format!("{{{{{name}}}}}")))),
+                .unwrap_or_else(|| Value::Str(format!("{{{{{name}}}}}").into()))),
         }
     }
 
-    fn arg1_str(&self, args: &[Value]) -> String {
+    fn arg1_str(&self, args: &[Value<'v>]) -> String {
         args.first().map(|v| v.to_string()).unwrap_or_default()
     }
 
-    fn call_str(&mut self, name: &str, args: &[Value]) -> Result<Value, String> {
+    fn call_str(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         match name {
-            "upper" => Ok(Value::Str(self.arg1_str(args).to_uppercase())),
-            "lower" => Ok(Value::Str(self.arg1_str(args).to_lowercase())),
-            "trim" => Ok(Value::Str(self.arg1_str(args).trim().to_string())),
-            "trim_start" => Ok(Value::Str(self.arg1_str(args).trim_start().to_string())),
-            "trim_end" => Ok(Value::Str(self.arg1_str(args).trim_end().to_string())),
+            "upper" => Ok(Value::Str(self.arg1_str(args).to_uppercase().into())),
+            "lower" => Ok(Value::Str(self.arg1_str(args).to_lowercase().into())),
+            "trim" => Ok(Value::Str(self.arg1_str(args).trim().to_string().into())),
+            "trim_start" => Ok(Value::Str(self.arg1_str(args).trim_start().to_string().into())),
+            "trim_end" => Ok(Value::Str(self.arg1_str(args).trim_end().to_string().into())),
             "len" | "length" => match args.first() {
                 Some(Value::List(items)) => Ok(Value::Num(items.len() as f64)),
                 Some(Value::Str(s)) => Ok(Value::Num(s.chars().count() as f64)),
                 _ => Ok(Value::Num(self.arg1_str(args).chars().count() as f64)),
             },
             "repeat" => {
-                let s = args.first().ok_or("repeat requires a string")?.to_string();
+                let s = args.first().ok_or(Cow::Borrowed("repeat requires a string"))?.to_string();
                 let n = args
                     .get(1)
                     .and_then(|v| v.as_num())
-                    .ok_or("repeat requires a count")? as usize;
-                Ok(Value::Str(s.repeat(n)))
+                    .ok_or(Cow::Borrowed("repeat requires a count"))? as usize;
+                Ok(Value::Str(s.repeat(n).into()))
             }
             "replace" => {
                 let s = args
-                    .get(0)
-                    .ok_or("replace requires 3 arguments")?
+                    .first()
+                    .ok_or(Cow::Borrowed("replace requires 3 arguments"))?
                     .to_string();
                 let from = args
                     .get(1)
-                    .ok_or("replace requires 3 arguments")?
+                    .ok_or(Cow::Borrowed("replace requires 3 arguments"))?
                     .to_string();
                 let to = args
                     .get(2)
-                    .ok_or("replace requires 3 arguments")?
+                    .ok_or(Cow::Borrowed("replace requires 3 arguments"))?
                     .to_string();
-                Ok(Value::Str(s.replace(&from, &to)))
+                Ok(Value::Str(s.replace(&from, &to).into()))
             }
             "slice" => {
-                let s = args.get(0).ok_or("slice requires 3 arguments")?.to_string();
+                let s = args.first().ok_or(Cow::Borrowed("slice requires 3 arguments"))?.to_string();
                 let start = args
                     .get(1)
                     .and_then(|v| v.as_num())
-                    .ok_or("start must be a number")? as usize;
+                    .ok_or(Cow::Borrowed("start must be a number"))? as usize;
                 let end = args
                     .get(2)
                     .and_then(|v| v.as_num())
-                    .ok_or("end must be a number")? as usize;
-                let chars: Vec<char> = s.chars().collect();
+                    .ok_or(Cow::Borrowed("end must be a number"))? as usize;
+                let chars = s.chars().collect::<Vec<_>>();
                 if start > chars.len() || end > chars.len() || start > end {
-                    return Err("slice indices out of bounds".to_string());
+                    return Err("slice indices out of bounds".into());
                 }
-                Ok(Value::Str(chars[start..end].iter().collect()))
+                Ok(Value::Str(chars[start..end].iter().collect::<String>().into()))
             }
             "split" => {
-                let s = args.get(0).ok_or("split requires 2 arguments")?.to_string();
-                let delim = args.get(1).ok_or("split requires a delimiter")?.to_string();
-                let parts: Vec<Value> =
-                    s.split(&delim).map(|p| Value::Str(p.to_string())).collect();
+                let s = args.first().ok_or(Cow::Borrowed("split requires 2 arguments"))?.to_string();
+                let delim = args.get(1).ok_or(Cow::Borrowed("split requires a delimiter"))?.to_string();
+                let parts = s.split(&delim).map(|p| Value::Str(p.to_string().into())).collect();
                 Ok(Value::List(parts))
             }
             "contains" => {
                 let s = args
-                    .get(0)
-                    .ok_or("contains requires 2 arguments")?
+                    .first()
+                    .ok_or(Cow::Borrowed("contains requires 2 arguments"))?
                     .to_string();
                 let sub = args
                     .get(1)
-                    .ok_or("contains requires a substring")?
+                    .ok_or(Cow::Borrowed("contains requires a substring"))?
                     .to_string();
                 Ok(Value::Bool(s.contains(&sub)))
             }
             "starts_with" => {
                 let s = args
-                    .get(0)
-                    .ok_or("starts_with requires 2 arguments")?
+                    .first()
+                    .ok_or(Cow::Borrowed("starts_with requires 2 arguments"))?
                     .to_string();
                 let prefix = args
                     .get(1)
-                    .ok_or("starts_with requires a prefix")?
+                    .ok_or(Cow::Borrowed("starts_with requires a prefix"))?
                     .to_string();
                 Ok(Value::Bool(s.starts_with(&prefix)))
             }
             "ends_with" => {
                 let s = args
-                    .get(0)
-                    .ok_or("ends_with requires 2 arguments")?
+                    .first()
+                    .ok_or(Cow::Borrowed("ends_with requires 2 arguments"))?
                     .to_string();
                 let suffix = args
                     .get(1)
-                    .ok_or("ends_with requires a suffix")?
+                    .ok_or(Cow::Borrowed("ends_with requires a suffix"))?
                     .to_string();
                 Ok(Value::Bool(s.ends_with(&suffix)))
             }
             "substr" => {
                 let s = args
-                    .get(0)
-                    .ok_or("substr requires 3 arguments")?
+                    .first()
+                    .ok_or(Cow::Borrowed("substr requires 3 arguments"))?
                     .to_string();
                 let start = args
                     .get(1)
                     .and_then(|v| v.as_num())
-                    .ok_or("start must be a number")? as usize;
+                    .ok_or(Cow::Borrowed("start must be a number"))? as usize;
                 let len = args
                     .get(2)
                     .and_then(|v| v.as_num())
-                    .ok_or("length must be a number")? as usize;
-                let chars: Vec<char> = s.chars().collect();
+                    .ok_or(Cow::Borrowed("length must be a number"))? as usize;
+                let chars = s.chars().collect::<Vec<_>>();
                 let start = start.min(chars.len());
                 let end = (start + len).min(chars.len());
-                Ok(Value::Str(chars[start..end].iter().collect()))
+                Ok(Value::Str(chars[start..end].iter().collect::<String>().into()))
             }
             "reverse" => match args.first() {
                 Some(Value::List(items)) => {
@@ -418,45 +414,45 @@ impl Evaluator {
                     Ok(Value::List(rev))
                 }
                 Some(Value::Str(s)) => Ok(Value::Str(s.chars().rev().collect())),
-                _ => Err("reverse requires a list or string".to_string()),
+                _ => Err("reverse requires a list or string".into()),
             },
             "pad_start" => {
                 let s = args
-                    .get(0)
-                    .ok_or("pad_start requires string and length")?
+                    .first()
+                    .ok_or(Cow::Borrowed("pad_start requires string and length"))?
                     .to_string();
                 let target = args
                     .get(1)
                     .and_then(|v| v.as_num())
-                    .ok_or("length must be a number")? as usize;
+                    .ok_or(Cow::Borrowed("length must be a number"))? as usize;
                 let ch = args
                     .get(2)
                     .and_then(|v| v.to_string().chars().next())
                     .unwrap_or(' ');
                 let pad_len = target.saturating_sub(s.chars().count());
-                let padding: String = std::iter::repeat_n(ch, pad_len).collect();
-                Ok(Value::Str(format!("{padding}{s}")))
+                let padding = std::iter::repeat_n(ch, pad_len).collect::<String>();
+                Ok(Value::Str(format!("{padding}{s}").into()))
             }
             "pad_end" => {
                 let s = args
-                    .get(0)
-                    .ok_or("pad_end requires string and length")?
+                    .first()
+                    .ok_or(Cow::Borrowed("pad_end requires string and length"))?
                     .to_string();
                 let target = args
                     .get(1)
                     .and_then(|v| v.as_num())
-                    .ok_or("length must be a number")? as usize;
+                    .ok_or(Cow::Borrowed("length must be a number"))? as usize;
                 let ch = args
                     .get(2)
                     .and_then(|v| v.to_string().chars().next())
                     .unwrap_or(' ');
                 let pad_len = target.saturating_sub(s.chars().count());
-                let padding: String = std::iter::repeat_n(ch, pad_len).collect();
-                Ok(Value::Str(format!("{s}{padding}")))
+                let padding = std::iter::repeat_n(ch, pad_len).collect::<String>();
+                Ok(Value::Str(format!("{s}{padding}").into()))
             }
             "concat" => {
-                let parts: Vec<String> = args.iter().map(|v| v.to_string()).collect();
-                Ok(Value::Str(parts.join("")))
+                let parts = args.iter().map(|v| v.to_string()).collect::<Vec<_>>();
+                Ok(Value::Str(parts.join("").into()))
             }
             "title" => {
                 let s = self.arg1_str(args);
@@ -473,7 +469,7 @@ impl Evaluator {
                         result.extend(c.to_lowercase());
                     }
                 }
-                Ok(Value::Str(result))
+                Ok(Value::Str(result.into()))
             }
             "join" => {
                 let sep = args.get(1).map(|v| v.to_string()).unwrap_or_default();
@@ -485,112 +481,112 @@ impl Evaluator {
                         .join(&sep),
                     v => v.map(|v| v.to_string()).unwrap_or_default(),
                 };
-                Ok(Value::Str(parts))
+                Ok(Value::Str(parts.into()))
             }
-            _ => Err(format!("Unknown string function: {name}")),
+            _ => Err(format!("Unknown string function: {name}").into()),
         }
     }
 
-    fn call_math(&mut self, name: &str, args: &[Value]) -> Result<Value, String> {
+    fn call_math(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         match name {
             "to_num" | "number" => {
                 let s = self.arg1_str(args);
                 s.parse::<f64>()
                     .map(Value::Num)
-                    .map_err(|_| format!("Cannot convert '{s}' to number"))
+                    .map_err(|_| format!("Cannot convert '{s}' to number").into())
             }
             "to_str" | "string" => Ok(Value::Str(
-                args.first().cloned().unwrap_or(Value::Nil).to_string(),
+                args.first().unwrap_or(&Value::Nil).to_string().into(),
             )),
             "floor" => {
                 let n = args
                     .first()
                     .and_then(|v| v.as_num())
-                    .ok_or("floor requires a number")?;
+                    .ok_or(Cow::Borrowed("floor requires a number"))?;
                 Ok(Value::Num(n.floor()))
             }
             "ceil" | "ceiling" => {
                 let n = args
                     .first()
                     .and_then(|v| v.as_num())
-                    .ok_or("ceil requires a number")?;
+                    .ok_or(Cow::Borrowed("ceil requires a number"))?;
                 Ok(Value::Num(n.ceil()))
             }
             "round" => {
                 let n = args
                     .first()
                     .and_then(|v| v.as_num())
-                    .ok_or("round requires a number")?;
+                    .ok_or(Cow::Borrowed("round requires a number"))?;
                 Ok(Value::Num(n.round()))
             }
             "abs" => {
                 let n = args
                     .first()
                     .and_then(|v| v.as_num())
-                    .ok_or("abs requires a number")?;
+                    .ok_or(Cow::Borrowed("abs requires a number"))?;
                 Ok(Value::Num(n.abs()))
             }
             "min" | "max" => {
                 if args.is_empty() {
-                    return Err(format!("{name} requires at least one number"));
+                    return Err(format!("{name} requires at least one number").into());
                 }
                 let cmp = if name == "min" {
                     f64::min as fn(f64, f64) -> f64
                 } else {
                     f64::max
                 };
-                let mut result = args[0].as_num().ok_or("min/max requires numbers")?;
+                let mut result = args[0].as_num().ok_or(Cow::Borrowed("min/max requires numbers"))?;
                 for a in &args[1..] {
-                    result = cmp(result, a.as_num().ok_or("min/max requires numbers")?);
+                    result = cmp(result, a.as_num().ok_or(Cow::Borrowed("min/max requires numbers"))?);
                 }
                 Ok(Value::Num(result))
             }
             "clamp" => {
                 let v = args
-                    .get(0)
+                    .first()
                     .and_then(|a| a.as_num())
-                    .ok_or("clamp requires numbers")?;
+                    .ok_or(Cow::Borrowed("clamp requires numbers"))?;
                 let lo = args
                     .get(1)
                     .and_then(|a| a.as_num())
-                    .ok_or("clamp requires numbers")?;
+                    .ok_or(Cow::Borrowed("clamp requires numbers"))?;
                 let hi = args
                     .get(2)
                     .and_then(|a| a.as_num())
-                    .ok_or("clamp requires numbers")?;
+                    .ok_or(Cow::Borrowed("clamp requires numbers"))?;
                 Ok(Value::Num(v.clamp(lo, hi)))
             }
             "rand" | "random" => {
                 let seed = nano_seed();
                 if args.len() == 2 {
-                    let lo = args[0].as_num().ok_or("random requires numbers")? as i64;
-                    let hi = args[1].as_num().ok_or("random requires numbers")? as i64;
+                    let lo = args[0].as_num().ok_or(Cow::Borrowed("random requires numbers"))? as i64;
+                    let hi = args[1].as_num().ok_or(Cow::Borrowed("random requires numbers"))? as i64;
                     let range = (hi - lo + 1) as u64;
                     Ok(Value::Num((lo + ((seed % range) as i64)) as f64))
                 } else if args.is_empty() {
                     Ok(Value::Num((seed % 1000) as f64 / 1000.0))
                 } else {
-                    Err("random takes 0 or 2 arguments".to_string())
+                    Err("random takes 0 or 2 arguments".into())
                 }
             }
-            _ => Err(format!("Unknown math function: {name}")),
+            _ => Err(format!("Unknown math function: {name}").into()),
         }
     }
 
-    fn call_list(&mut self, name: &str, args: &[Value]) -> Result<Value, String> {
+    fn call_list(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         match name {
             "list" => Ok(Value::List(args.to_vec())),
             "choice" => {
                 let items = match args.first() {
-                    Some(Value::List(items)) if !items.is_empty() => items.clone(),
+                    Some(Value::List(items)) if !items.is_empty() => items,
                     Some(Value::List(_)) => {
-                        return Err("choice requires a non-empty list".to_string())
+                        return Err("choice requires a non-empty list".into())
                     }
                     _ => {
                         if args.is_empty() {
-                            return Err("choice requires arguments".to_string());
+                            return Err("choice requires arguments".into());
                         }
-                        args.to_vec()
+                        args
                     }
                 };
                 let seed = nano_seed();
@@ -600,38 +596,38 @@ impl Evaluator {
                 Some(Value::List(items)) => items
                     .first()
                     .cloned()
-                    .ok_or_else(|| "Empty list".to_string()),
+                    .ok_or(Cow::Borrowed("Empty list")),
                 Some(Value::Str(s)) => s
                     .chars()
                     .next()
-                    .map(|c| Value::Str(c.to_string()))
-                    .ok_or_else(|| "Empty string".to_string()),
-                _ => Err("first requires a list or string".to_string()),
+                    .map(|c| Value::Str(c.to_string().into()))
+                    .ok_or(Cow::Borrowed("Empty string")),
+                _ => Err("first requires a list or string".into()),
             },
             "last" => match args.first() {
                 Some(Value::List(items)) => items
                     .last()
                     .cloned()
-                    .ok_or_else(|| "Empty list".to_string()),
+                    .ok_or(Cow::Borrowed("Empty list")),
                 Some(Value::Str(s)) => s
                     .chars()
                     .last()
-                    .map(|c| Value::Str(c.to_string()))
-                    .ok_or_else(|| "Empty string".to_string()),
-                _ => Err("last requires a list or string".to_string()),
+                    .map(|c| Value::Str(c.to_string().into()))
+                    .ok_or("Empty string".into()),
+                _ => Err("last requires a list or string".into()),
             },
             "map" => {
                 let items = match args.first() {
-                    Some(Value::List(items)) => items.clone(),
-                    v => v.map(|v| v.clone()).map(|v| vec![v]).unwrap_or_default(),
+                    Some(Value::List(items)) => items,
+                    v => v.map(slice::from_ref).unwrap_or_default(),
                 };
                 let fn_val = args
                     .get(1)
-                    .ok_or("map requires a function name")?;
+                    .ok_or(Cow::Borrowed("map requires a function name"))?;
                 let mut results = Vec::with_capacity(items.len());
                 match fn_val {
                     Value::Fn { params, body } => {
-                        for item in &items {
+                        for item in items {
                             if params.len() == 1 {
                                 self.env.insert(params[0].clone(), item.clone());
                             }
@@ -643,10 +639,10 @@ impl Evaluator {
                     }
                     other => {
                         let fn_name = other.to_string();
-                        for item in &items {
-                            self.env.insert("__item".to_string(), item.clone());
-                            results.push(self.call_builtin(&fn_name, std::slice::from_ref(item))?);
-                            self.env.remove("__item");
+                        for item in items {
+                            self.env.insert("__item".into(), item.clone());
+                            results.push(self.call_builtin(&fn_name, slice::from_ref(item))?);
+                            self.env.remove(&Cow::Borrowed("__item"));
                         }
                     }
                 }
@@ -654,16 +650,16 @@ impl Evaluator {
             }
             "filter" => {
                 let items = match args.first() {
-                    Some(Value::List(items)) => items.clone(),
-                    v => v.map(|v| v.clone()).map(|v| vec![v]).unwrap_or_default(),
+                    Some(Value::List(items)) => items,
+                    v => v.map(slice::from_ref).unwrap_or_default(),
                 };
                 let fn_val = args
                     .get(1)
-                    .ok_or("filter requires a condition function")?;
+                    .ok_or(Cow::Borrowed("filter requires a condition function"))?;
                 let mut results = Vec::with_capacity(items.len());
                 match fn_val {
                     Value::Fn { params, body } => {
-                        for item in &items {
+                        for item in items {
                             if params.len() == 1 {
                                 self.env.insert(params[0].clone(), item.clone());
                             }
@@ -678,13 +674,13 @@ impl Evaluator {
                     }
                     other => {
                         let cond_fn = other.to_string();
-                        for item in &items {
-                            self.env.insert("__item".to_string(), item.clone());
-                            let cond = self.call_builtin(&cond_fn, std::slice::from_ref(item))?;
+                        for item in items {
+                            self.env.insert("__item".into(), item.clone());
+                            let cond = self.call_builtin(&cond_fn, slice::from_ref(item))?;
                             if cond.as_bool() {
                                 results.push(item.clone());
                             }
-                            self.env.remove("__item");
+                            self.env.remove(&Cow::Borrowed("__item"));
                         }
                     }
                 }
@@ -693,95 +689,95 @@ impl Evaluator {
             "sort" => {
                 let mut items = match args.first() {
                     Some(Value::List(items)) => items.clone(),
-                    _ => return Err("sort requires a list".to_string()),
+                    _ => return Err("sort requires a list".into()),
                 };
-                items.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+                items.sort_by_key(|x| x.to_string());
                 Ok(Value::List(items))
             }
             "join_list" => {
-                let Value::List(items) = args.first().ok_or("join_list requires a list")? else {
-                    return Err("join_list requires a list".to_string());
+                let Value::List(items) = args.first().ok_or(Cow::Borrowed("join_list requires a list"))? else {
+                    return Err("join_list requires a list".into());
                 };
                 let sep = args.get(1).map(|v| v.to_string()).unwrap_or_default();
-                let result: Vec<String> = items.iter().map(|v| v.to_string()).collect();
-                Ok(Value::Str(result.join(&sep)))
+                let result = items.iter().map(|v| v.to_string()).collect::<Vec<_>>();
+                Ok(Value::Str(result.join(&sep).into()))
             }
-            _ => Err(format!("Unknown list function: {name}")),
+            _ => Err(format!("Unknown list function: {name}").into()),
         }
     }
 
-    fn call_date(&mut self, name: &str, args: &[Value]) -> Result<Value, String> {
+    fn call_date(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         match name {
             "now" => {
                 let fmt = args
                     .first()
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "%Y-%m-%d %H:%M:%S".to_string());
-                Ok(Value::Str(chrono::Local::now().format(&fmt).to_string()))
+                    .map(|v| Cow::Owned(v.to_string()))
+                    .unwrap_or(Cow::Borrowed("%Y-%m-%d %H:%M:%S"));
+                Ok(Value::Str(chrono::Local::now().format(&fmt).to_string().into()))
             }
             "today" => {
                 let fmt = args
                     .first()
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "%Y-%m-%d".to_string());
-                Ok(Value::Str(chrono::Local::now().format(&fmt).to_string()))
+                    .map(|v| Cow::Owned(v.to_string()))
+                    .unwrap_or(Cow::Borrowed("%Y-%m-%d"));
+                Ok(Value::Str(chrono::Local::now().format(&fmt).to_string().into()))
             }
             "date_add" => {
                 let s = args
-                    .get(0)
-                    .ok_or("date_add requires date string and days")?
+                    .first()
+                    .ok_or(Cow::Borrowed("date_add requires date string and days"))?
                     .to_string();
                 let days = args
                     .get(1)
                     .and_then(|v| v.as_num())
-                    .ok_or("days must be a number")? as i64;
+                    .ok_or(Cow::Borrowed("days must be a number"))? as i64;
                 match chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
                     Ok(dt) => Ok(Value::Str(
                         (dt + chrono::Duration::days(days))
                             .format("%Y-%m-%d")
-                            .to_string(),
+                            .to_string().into(),
                     )),
                     Err(_) => {
                         let dt = chrono::Local::now().date_naive();
                         Ok(Value::Str(
-                            (dt + chrono::Duration::days(days)).format(&s).to_string(),
+                            (dt + chrono::Duration::days(days)).format(&s).to_string().into(),
                         ))
                     }
                 }
             }
             "date_format" => {
                 let s = args
-                    .get(0)
-                    .ok_or("date_format requires date and format")?
+                    .first()
+                    .ok_or(Cow::Borrowed("date_format requires date and format"))?
                     .to_string();
                 let fmt = args
                     .get(1)
-                    .ok_or("date_format requires a format string")?
+                    .ok_or(Cow::Borrowed("date_format requires a format string"))?
                     .to_string();
                 match chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
-                    Ok(dt) => Ok(Value::Str(dt.format(&fmt).to_string())),
-                    Err(_) => Err(format!("Cannot parse date: {s}")),
+                    Ok(dt) => Ok(Value::Str(dt.format(&fmt).to_string().into())),
+                    Err(_) => Err(format!("Cannot parse date: {s}").into()),
                 }
             }
-            _ => Err(format!("Unknown date function: {name}")),
+            _ => Err(format!("Unknown date function: {name}").into()),
         }
     }
 
-    fn call_logic(&mut self, name: &str, args: &[Value]) -> Result<Value, String> {
+    fn call_logic(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         match name {
             "if_then_else" => {
-                let cond = args.first().ok_or("if_then_else requires 3 arguments")?;
-                let then = args.get(1).ok_or("if_then_else requires 3 arguments")?;
-                let els = args.get(2).ok_or("if_then_else requires 3 arguments")?;
+                let cond = args.first().ok_or(Cow::Borrowed("if_then_else requires 3 arguments"))?;
+                let then = args.get(1).ok_or(Cow::Borrowed("if_then_else requires 3 arguments"))?;
+                let els = args.get(2).ok_or(Cow::Borrowed("if_then_else requires 3 arguments"))?;
                 Ok(if cond.as_bool() {
-                    then.clone()
+                    then
                 } else {
-                    els.clone()
-                })
+                    els
+                }.clone())
             }
             "__builtin_or" => Ok(Value::Bool(args.iter().any(|v| v.as_bool()))),
             "__builtin_and" => Ok(Value::Bool(args.iter().all(|v| v.as_bool()))),
-            _ => Err(format!("Unknown logic function: {name}")),
+            _ => Err(format!("Unknown logic function: {name}").into()),
         }
     }
 

@@ -6,7 +6,7 @@ use std::sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex};
 static EXPANDING: AtomicBool = AtomicBool::new(false);
 
 pub fn start_listener(manager: TriggerManager, package_mgr: PackageManager, ender_char: char) {
-    let buffer: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+    let buffer = Arc::new(Mutex::new(String::new()));
     let ctrl_pressed = Arc::new(AtomicBool::new(false));
     let alt_pressed = Arc::new(AtomicBool::new(false));
 
@@ -164,11 +164,11 @@ fn try_expand_with_args(buffer: &str, manager: &TriggerManager) -> bool {
             let trigger_text_end = trigger_start + trigger.trigger_text.len();
             let args_str = &buffer[trigger_text_end..];
 
-            let args: Vec<String> = args_str
+            let args = args_str
                 .split_whitespace()
                 .filter(|s| !s.is_empty())
                 .map(|s| s.to_string())
-                .collect();
+                .collect::<Vec<_>>();
 
             let backspace_count = buffer[trigger_start..].chars().count() + 1;
 

@@ -7,44 +7,44 @@ use lexer::Lexer;
 use parser::Parser;
 use evaluator::Evaluator;
 use ast::Value;
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap, fmt::Write};
 
-pub fn parse(source: &str) -> Result<ast::Expr, String> {
+pub fn parse(source: &str) -> Result<ast::Expr<'_>, Cow<'static, str>> {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize()?;
     let mut parser = Parser::new(tokens);
     parser.parse()
 }
 
-pub fn evaluate(source: &str, context: &HashMap<String, String>) -> Result<String, String> {
+pub fn evaluate(source: &str, context: &HashMap<String, String>) -> Result<String, Cow<'static, str>> {
     evaluate_with_args(source, context, &[])
 }
 
-pub fn evaluate_with_args(source: &str, context: &HashMap<String, String>, args: &[String]) -> Result<String, String> {
+pub fn evaluate_with_args(source: &str, context: &HashMap<String, String>, args: &[String]) -> Result<String, Cow<'static, str>> {
     let expr = parse(source)?;
     let mut evaluator = Evaluator::default();
 
     for (key, value) in context {
-        evaluator.env.insert(key.clone(), if key == "_args_len" {
-            Value::Str(value.clone())
+        evaluator.env.insert(key.as_str().into(), if key == "_args_len" {
+            Value::Str(value.as_str().into())
         } else {
             if let Ok(n) = value.parse::<f64>() {
                 Value::Num(n)
             } else {
-                Value::Str(value.clone())
+                Value::Str(value.as_str().into())
             }
         });
     }
 
-    let args_values: Vec<Value> = args.iter().map(|a| Value::Str(a.clone())).collect();
-    evaluator.env.insert("args".to_string(), Value::List(args_values));
+    let args_values = args.iter().map(|a| Value::Str(a.as_str().into())).collect();
+    evaluator.env.insert("args".into(), Value::List(args_values));
 
     let result = evaluator.evaluate(&expr)?;
     Ok(result.to_string())
 }
 
 #[allow(dead_code)]
-pub fn resolve_template(template: &str, context: &HashMap<String, String>) -> Result<String, String> {
+pub fn resolve_template(template: &str, context: &HashMap<String, String>) -> Result<String, Cow<'static, str>> {
     let mut result = template.to_string();
     let mut changed = true;
     let mut iterations = 0;
@@ -80,7 +80,7 @@ pub fn resolve_template(template: &str, context: &HashMap<String, String>) -> Re
                             chars.next();
                             match evaluate(&var_content, context) {
                                 Ok(value) => new_result.push_str(&value),
-                                Err(e) => new_result.push_str(&format!("{{{{{var_content} Error: {e}}}}}")),
+                                Err(e) => write!(&mut new_result, "{{{{{var_content} Error: {e}}}}}").unwrap(),
                             }
                             in_var = false;
                             continue;
@@ -96,8 +96,7 @@ pub fn resolve_template(template: &str, context: &HashMap<String, String>) -> Re
         }
 
         if in_var {
-            new_result.push_str("{{");
-            new_result.push_str(&var_content);
+            write!(&mut new_result, "{{{{{var_content}").unwrap();
         }
 
         result = new_result;

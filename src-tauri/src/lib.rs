@@ -5,9 +5,10 @@ mod settings;
 mod trigger;
 
 use package::PackageManager;
-use std::{ffi::CString, fs, path::PathBuf, ptr::null_mut, sync::{Arc, Mutex}};
+use std::{borrow::Cow, ffi::CString, fs::{self, File}, io::{BufReader, BufWriter}, path::PathBuf, ptr::null_mut, sync::{Arc, Mutex}};
 use tauri::{menu::Menu, tray::TrayIconBuilder, Manager, State};
 use trigger::{GlobalVar, TriggerManager, TriggerVar};
+use uuid::Uuid;
 use windows_sys::Win32::{Foundation::ERROR_SUCCESS, System::Registry::{HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ, RegCloseKey, RegCreateKeyExA, RegSetValueExA}};
 
 const SETTINGS_FILENAME: &str = "settings.json";
@@ -23,20 +24,19 @@ pub struct AppSettings {
 
 impl AppSettings {
     fn load(path: &PathBuf) -> Self {
-        if let Ok(Ok(s)) = fs::read_to_string(path).map(|content| serde_json::from_str(&content)) {
+        if let Ok(Ok(s)) = File::open(path).map(|file| serde_json::from_reader(BufReader::new(file))) {
             s
         } else {
             Self::default()
         }
     }
 
-    fn save(&self, path: &PathBuf) -> Result<(), String> {
-        let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
+    fn save(&self, path: &PathBuf) -> Result<(), Cow<'static, str>> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        fs::write(path, content).map_err(|e| e.to_string())?;
-        Ok(())
+
+        serde_json::to_writer_pretty(BufWriter::new(File::open(path).map_err(|e| e.to_string())?), self).map_err(|e| e.to_string().into())
     }
 }
 
@@ -130,7 +130,7 @@ fn add_trigger(
     category: String,
     args_mode: bool,
     vars: Vec<TriggerVar>,
-) -> Result<trigger::Trigger, String> {
+) -> Result<trigger::Trigger, Cow<'static, str>> {
     manager.lock().unwrap().add_trigger(
         trigger_text,
         replacement,
@@ -150,7 +150,7 @@ fn update_trigger(
     args_mode: Option<bool>,
     enabled: Option<bool>,
     vars: Option<Vec<TriggerVar>>,
-) -> Result<trigger::Trigger, String> {
+) -> Result<trigger::Trigger, Cow<'static, str>> {
     manager.lock().unwrap().update_trigger(
         id,
         trigger_text,
@@ -163,12 +163,12 @@ fn update_trigger(
 }
 
 #[tauri::command]
-fn delete_item(manager: State<Mutex<TriggerManager>>, item_type: String, id: String) -> Result<(), String> {
+fn delete_item(manager: State<Mutex<TriggerManager>>, item_type: String, id: Uuid) -> Result<(), Cow<'static, str>> {
     let m = manager.lock().unwrap();
     match item_type.as_str() {
         "trigger" => m.delete_trigger(id),
         "global_var" => m.delete_global_var(id),
-        _ => Err(format!("Unknown item type: {item_type}")),
+        _ => Err(format!("Unknown item type: {item_type}").into()),
     }
 }
 
@@ -182,18 +182,18 @@ fn add_global_var(
     manager: State<Mutex<TriggerManager>>,
     name: String,
     script: String,
-) -> Result<GlobalVar, String> {
+) -> Result<GlobalVar, Cow<'static, str>> {
     manager.lock().unwrap().add_global_var(name, script)
 }
 
 #[tauri::command]
 fn update_global_var(
     manager: State<Mutex<TriggerManager>>,
-    id: String,
+    id: Uuid,
     name: Option<String>,
     script: Option<String>,
     enabled: Option<bool>,
-) -> Result<GlobalVar, String> {
+) -> Result<GlobalVar, Cow<'static, str>> {
     manager
         .lock()
         .unwrap()
@@ -240,9 +240,9 @@ fn preview_script(source: String, args: Vec<String>) -> String {
 }
 
 #[tauri::command]
-fn export_data(manager: State<Mutex<TriggerManager>>) -> Result<String, String> {
+fn export_data(manager: State<Mutex<TriggerManager>>) -> Result<String, Cow<'static, str>> {
     let m = manager.lock().unwrap();
-    let triggers: Vec<TriggerExport> = m
+    let triggers = m
         .get_triggers()
         .into_iter()
         .map(TriggerExport::from)
@@ -252,11 +252,11 @@ fn export_data(manager: State<Mutex<TriggerManager>>) -> Result<String, String> 
         triggers,
         global_vars: m.get_global_vars(),
     };
-    serde_json::to_string_pretty(&data).map_err(|e| e.to_string())
+    serde_json::to_string_pretty(&data).map_err(|e| e.to_string().into())
 }
 
 #[tauri::command]
-fn export_data_to_file(manager: State<Mutex<TriggerManager>>, path: String) -> Result<(), String> {
+fn export_data_to_file(manager: State<Mutex<TriggerManager>>, path: String) -> Result<(), Cow<'static, str>> {
     let json = export_data(manager)?;
     let path = PathBuf::from(&path);
     if let Some(parent) = path.parent() {
@@ -267,9 +267,8 @@ fn export_data_to_file(manager: State<Mutex<TriggerManager>>, path: String) -> R
 }
 
 #[tauri::command]
-fn import_data(manager: State<Mutex<TriggerManager>>, json: String) -> Result<String, String> {
-    let data: ExportData =
-        serde_json::from_str(&json).map_err(|e| format!("Invalid format: {e}"))?;
+fn import_data(manager: State<Mutex<TriggerManager>>, json: String) -> Result<String, Cow<'static, str>> {
+    let data = serde_json::from_str::<ExportData>(&json).map_err(|e| format!("Invalid format: {e}"))?;
     let m = manager.lock().unwrap();
 
     let trigger_count = data.triggers.len();
@@ -320,7 +319,7 @@ fn update_settings(
     theme_color: String,
     font_size: u32,
     language: String,
-) -> Result<AppSettings, String> {
+) -> Result<AppSettings, Cow<'static, str>> {
     let mut settings = state.lock().unwrap();
     settings.ender_char = ender_char;
     settings.theme_color = theme_color;
@@ -346,7 +345,7 @@ fn get_installed_packages(package_mgr: State<Arc<Mutex<PackageManager>>>) -> Vec
 fn install_package(
     package_mgr: State<Arc<Mutex<PackageManager>>>,
     id: String,
-) -> Result<(), String> {
+) -> Result<(), Cow<'static, str>> {
     package_mgr.lock().unwrap().install_package(id)
 }
 
@@ -354,12 +353,12 @@ fn install_package(
 fn uninstall_package(
     package_mgr: State<Arc<Mutex<PackageManager>>>,
     id: String,
-) -> Result<(), String> {
+) -> Result<(), Cow<'static, str>> {
     package_mgr.lock().unwrap().uninstall_package(id)
 }
 
 #[tauri::command]
-fn update_tray_icon(app: tauri::AppHandle, _theme_color: String) -> Result<(), String> {
+fn update_tray_icon(app: tauri::AppHandle, _theme_color: String) -> Result<(), Cow<'static, str>> {
     if let Some(tray) = app.tray_by_id("main") {
         let _ = tray.set_icon(Some(tauri::include_image!("icons/64x64.png")));
     }

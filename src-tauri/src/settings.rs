@@ -4,9 +4,7 @@ const APP_DIR_NAME: &str = "com.rubik.trigr";
 const SETTINGS_FILENAME: &str = "settings.json";
 
 pub fn get_settings_path() -> Option<PathBuf> {
-    env::var("APPDATA").ok().map(|appdata| {
-        PathBuf::from(appdata).join(APP_DIR_NAME).join(SETTINGS_FILENAME)
-    })
+    env::var("APPDATA").map_or(None, |appdata| Some(PathBuf::from(appdata).join(APP_DIR_NAME).join(SETTINGS_FILENAME)))
 }
 
 pub fn init_settings_dir() {

@@ -2,6 +2,7 @@ use crate::script::{
     ast::*,
     lexer::{Token, TokenKind},
 };
+use std::borrow::Cow;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -13,13 +14,13 @@ impl Parser {
         Self { tokens, pos: 0 }
     }
 
-    pub fn parse(&mut self) -> Result<Expr, String> {
+    pub fn parse<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         let expr = self.parse_pipe()?;
         self.consume(&TokenKind::Eof, "end of expression")?;
         Ok(expr)
     }
 
-    fn parse_pipe(&mut self) -> Result<Expr, String> {
+    fn parse_pipe<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         let mut expr = self.parse_if()?;
         while self.match_token(&TokenKind::Pipe) {
             let right = self.parse_if()?;
@@ -31,7 +32,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_if(&mut self) -> Result<Expr, String> {
+    fn parse_if<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         if self.match_token(&TokenKind::If) {
             let condition = self.parse_pipe()?;
             self.consume(&TokenKind::Then, "expected 'then' after if condition")?;
@@ -54,7 +55,7 @@ impl Parser {
         self.parse_match()
     }
 
-    fn parse_match(&mut self) -> Result<Expr, String> {
+    fn parse_match<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         if self.match_token(&TokenKind::Match) {
             let value = self.parse_pipe()?;
             self.consume(&TokenKind::LBrace, "expected '{' after match value")?;
@@ -70,7 +71,7 @@ impl Parser {
                         Expr::Literal(v) => v.clone(),
                         _ => return Err(
                             "Pattern must be a literal value (number, string, true, false, or nil)"
-                                .to_string(),
+                                .into(),
                         ),
                     };
                     self.consume(&TokenKind::Arrow, "expected '=>' after match pattern")?;
@@ -89,7 +90,7 @@ impl Parser {
         self.parse_let()
     }
 
-    fn parse_let(&mut self) -> Result<Expr, String> {
+    fn parse_let<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         if self.match_token(&TokenKind::Let) {
             let name = self.consume_ident()?;
             self.consume(&TokenKind::Eq, "expected '=' after let name")?;
@@ -105,7 +106,7 @@ impl Parser {
         self.parse_assignment()
     }
 
-    fn parse_assignment(&mut self) -> Result<Expr, String> {
+    fn parse_assignment<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         let expr = self.parse_or()?;
         if self.match_token(&TokenKind::Eq) {
             match expr {
@@ -118,14 +119,14 @@ impl Parser {
                         body: Box::new(Expr::Var(name_clone)),
                     })
                 }
-                _ => Err("Invalid assignment target".to_string()),
+                _ => Err("Invalid assignment target".into()),
             }
         } else {
             Ok(expr)
         }
     }
 
-    fn parse_or(&mut self) -> Result<Expr, String> {
+    fn parse_or<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         let mut expr = self.parse_and()?;
         while self.match_token(&TokenKind::Or) {
             let right = self.parse_and()?;
@@ -134,7 +135,7 @@ impl Parser {
                 left: Box::new(expr),
                 op: BinaryOp::Add,
                 right: Box::new(Expr::Call {
-                    callee: Box::new(Expr::Var("__builtin_or".to_string())),
+                    callee: Box::new(Expr::Var("__builtin_or".into())),
                     args: vec![left, right],
                 }),
             };
@@ -142,7 +143,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_and(&mut self) -> Result<Expr, String> {
+    fn parse_and<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         let mut expr = self.parse_equality()?;
         while self.match_token(&TokenKind::And) {
             let right = self.parse_equality()?;
@@ -151,7 +152,7 @@ impl Parser {
                 left: Box::new(expr),
                 op: BinaryOp::Add,
                 right: Box::new(Expr::Call {
-                    callee: Box::new(Expr::Var("__builtin_and".to_string())),
+                    callee: Box::new(Expr::Var("__builtin_and".into())),
                     args: vec![left, right],
                 }),
             };
@@ -159,7 +160,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_equality(&mut self) -> Result<Expr, String> {
+    fn parse_equality<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         let mut expr = self.parse_comparison()?;
         while self.match_token(&TokenKind::Eq) || self.match_token(&TokenKind::Ne) {
             let op = if self.tokens[self.pos - 1].kind == TokenKind::Eq {
@@ -177,7 +178,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_comparison(&mut self) -> Result<Expr, String> {
+    fn parse_comparison<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         let mut expr = self.parse_addition()?;
         while self.match_token(&TokenKind::Lt)
             || self.match_token(&TokenKind::Gt)
@@ -201,7 +202,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_addition(&mut self) -> Result<Expr, String> {
+    fn parse_addition<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         let mut expr = self.parse_multiplication()?;
         while self.match_token(&TokenKind::Plus) || self.match_token(&TokenKind::Minus) {
             let op = if self.tokens[self.pos - 1].kind == TokenKind::Plus {
@@ -219,7 +220,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_multiplication(&mut self) -> Result<Expr, String> {
+    fn parse_multiplication<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         let mut expr = self.parse_unary()?;
         while self.match_token(&TokenKind::Star)
             || self.match_token(&TokenKind::Slash)
@@ -241,7 +242,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_unary(&mut self) -> Result<Expr, String> {
+    fn parse_unary<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         if self.match_token(&TokenKind::Not) {
             let expr = self.parse_unary()?;
             return Ok(Expr::Unary {
@@ -259,7 +260,7 @@ impl Parser {
         self.parse_call()
     }
 
-    fn parse_call(&mut self) -> Result<Expr, String> {
+    fn parse_call<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         let mut expr = self.parse_primary()?;
 
         loop {
@@ -298,7 +299,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_primary(&mut self) -> Result<Expr, String> {
+    fn parse_primary<'e>(&mut self) -> Result<Expr<'e>, Cow<'static, str>> {
         if self.match_token(&TokenKind::True) {
             return Ok(Expr::Literal(Value::Bool(true)));
         }
@@ -310,14 +311,13 @@ impl Parser {
         }
 
         if self.match_token(&TokenKind::Number) {
-            let lexeme = self.tokens[self.pos - 1].lexeme.clone();
-            let n: f64 = lexeme.parse().map_err(|e| format!("Invalid number: {e}"))?;
+            let lexeme = &*self.tokens[self.pos - 1].lexeme;
+            let n = lexeme.parse().map_err(|e| format!("Invalid number: {e}"))?;
             return Ok(Expr::Literal(Value::Num(n)));
         }
 
         if self.check(&TokenKind::String) {
-            let s = self.advance().lexeme.clone();
-            return Ok(Expr::Literal(Value::Str(s)));
+            return Ok(Expr::Literal(Value::Str(self.advance().lexeme)));
         }
 
         if self.match_token(&TokenKind::LBracket) {
@@ -345,7 +345,7 @@ impl Parser {
                         looks_like_params = false;
                         break;
                     }
-                    params.push(self.advance().lexeme.clone());
+                    params.push(self.advance().lexeme);
                     if !self.match_token(&TokenKind::Comma) {
                         break;
                     }
@@ -365,7 +365,7 @@ impl Parser {
                     return Ok(Expr::Var(params.into_iter().next().unwrap()));
                 }
                 if params.is_empty() {
-                    return Err("Empty parentheses".to_string());
+                    return Err("Empty parentheses".into());
                 }
             }
 
@@ -409,18 +409,14 @@ impl Parser {
             }
         }
 
-        if self.check(&TokenKind::Ident) {
-            if self.pos + 1 < self.tokens.len()
-                && self.tokens[self.pos + 1].kind == TokenKind::Arrow
-            {
-                let name = self.advance().lexeme.clone();
-                self.advance();
-                let body = self.parse_pipe()?;
-                return Ok(Expr::Fn {
-                    params: vec![name],
-                    body: Box::new(body),
-                });
-            }
+        if self.check(&TokenKind::Ident) && self.pos + 1 < self.tokens.len() && self.tokens[self.pos + 1].kind == TokenKind::Arrow {
+            let name = self.advance().lexeme;
+            self.advance();
+            let body = self.parse_pipe()?;
+            return Ok(Expr::Fn {
+                params: vec![name],
+                body: Box::new(body),
+            });
         }
 
         if self.match_token(&TokenKind::Fn) {
@@ -442,15 +438,14 @@ impl Parser {
         }
 
         if self.check(&TokenKind::Ident) {
-            let name = self.advance().lexeme.clone();
-            return Ok(Expr::Var(name));
+            return Ok(Expr::Var(self.advance().lexeme));
         }
 
         let token = self.peek();
         Err(format!(
             "Unexpected token '{:?}' at line {}",
             token.kind, token.line
-        ))
+        ).into())
     }
 
     fn peek(&self) -> &Token {
@@ -481,7 +476,7 @@ impl Parser {
         }
     }
 
-    fn consume(&mut self, kind: &TokenKind, message: &str) -> Result<Token, String> {
+    fn consume(&mut self, kind: &TokenKind, message: &str) -> Result<Token, Cow<'static, str>> {
         if self.check(kind) {
             Ok(self.advance())
         } else {
@@ -489,11 +484,11 @@ impl Parser {
             Err(format!(
                 "Line {}: expected {message}, got '{:?}'",
                 token.line, token.kind
-            ))
+            ).into())
         }
     }
 
-    fn consume_ident(&mut self) -> Result<String, String> {
+    fn consume_ident<'t>(&mut self) -> Result<Cow<'t, str>, Cow<'static, str>> {
         let token = self.consume(&TokenKind::Ident, "identifier")?;
         Ok(token.lexeme)
     }

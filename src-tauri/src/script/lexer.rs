@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Ident,
@@ -48,13 +50,16 @@ pub enum TokenKind {
 #[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
-    pub lexeme: String,
+    pub lexeme: Cow<'static, str>,
     pub line: usize,
 }
 
 impl Token {
-    pub const fn new(kind: TokenKind, lexeme: String, line: usize) -> Self {
-        Self { kind, lexeme, line }
+    pub fn new<L>(kind: TokenKind, lexeme: L, line: usize) -> Self
+    where
+        L: Into<Cow<'static, str>>,
+    {
+        Self { kind, lexeme: lexeme.into(), line }
     }
 }
 
@@ -73,7 +78,7 @@ impl Lexer {
         }
     }
 
-    pub fn tokenize(&mut self) -> Result<Vec<Token>, String> {
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, Cow<'static, str>> {
         let mut tokens = vec![];
         while !self.is_at_end() {
             let token = self.scan_token()?;
@@ -81,11 +86,11 @@ impl Lexer {
                 tokens.push(t);
             }
         }
-        tokens.push(Token::new(TokenKind::Eof, String::new(), self.line));
+        tokens.push(Token::new(TokenKind::Eof, "", self.line));
         Ok(tokens)
     }
 
-    fn scan_token(&mut self) -> Result<Option<Token>, String> {
+    fn scan_token(&mut self) -> Result<Option<Token>, Cow<'static, str>> {
         self.skip_whitespace();
         if self.is_at_end() {
             return Ok(None);
@@ -97,63 +102,63 @@ impl Lexer {
         match ch {
             '(' => Ok(Some(Token::new(
                 TokenKind::LParen,
-                "(".to_string(),
+                "(",
                 self.line,
             ))),
             ')' => Ok(Some(Token::new(
                 TokenKind::RParen,
-                ")".to_string(),
+                ")",
                 self.line,
             ))),
             '{' => Ok(Some(Token::new(
                 TokenKind::LBrace,
-                "{".to_string(),
+                "{",
                 self.line,
             ))),
             '}' => Ok(Some(Token::new(
                 TokenKind::RBrace,
-                "}".to_string(),
+                "}",
                 self.line,
             ))),
             '[' => Ok(Some(Token::new(
                 TokenKind::LBracket,
-                "[".to_string(),
+                "[",
                 self.line,
             ))),
             ']' => Ok(Some(Token::new(
                 TokenKind::RBracket,
-                "]".to_string(),
+                "]",
                 self.line,
             ))),
             ',' => Ok(Some(Token::new(
                 TokenKind::Comma,
-                ",".to_string(),
+                ",",
                 self.line,
             ))),
-            '.' => Ok(Some(Token::new(TokenKind::Dot, ".".to_string(), self.line))),
+            '.' => Ok(Some(Token::new(TokenKind::Dot, ".", self.line))),
             ';' => Ok(Some(Token::new(
                 TokenKind::Semicolon,
-                ";".to_string(),
+                ";",
                 self.line,
             ))),
             ':' => Ok(Some(Token::new(
                 TokenKind::Colon,
-                ":".to_string(),
+                ":",
                 self.line,
             ))),
             '+' => Ok(Some(Token::new(
                 TokenKind::Plus,
-                "+".to_string(),
+                "+",
                 self.line,
             ))),
             '-' => Ok(Some(if self.match_next('>') {
-                Token::new(TokenKind::Arrow, "->".to_string(), self.line)
+                Token::new(TokenKind::Arrow, "->", self.line)
             } else {
-                Token::new(TokenKind::Minus, "-".to_string(), self.line)
+                Token::new(TokenKind::Minus, "-", self.line)
             })),
             '*' => Ok(Some(Token::new(
                 TokenKind::Star,
-                "*".to_string(),
+                "*",
                 self.line,
             ))),
             '/' => Ok(if self.match_next('/') {
@@ -163,47 +168,47 @@ impl Lexer {
                 self.skip_block_comment()?;
                 None
             } else {
-                Some(Token::new(TokenKind::Slash, "/".to_string(), self.line))
+                Some(Token::new(TokenKind::Slash, "/", self.line))
             }),
             '%' => Ok(Some(Token::new(
                 TokenKind::Percent,
-                "%".to_string(),
+                "%",
                 self.line,
             ))),
-            '|' => Ok(Some(Token::new(TokenKind::Pipe, "|".to_string(), self.line))),
-            '&' => Err(format!("Unexpected character '&' at line {}", self.line)),
+            '|' => Ok(Some(Token::new(TokenKind::Pipe, "|", self.line))),
+            '&' => Err(format!("Unexpected character '&' at line {}", self.line).into()),
             '!' => Ok(Some(if self.match_next('=') {
-                Token::new(TokenKind::Ne, "!=".to_string(), self.line)
+                Token::new(TokenKind::Ne, "!=", self.line)
             } else {
-                return Err(format!("Unexpected character '!' at line {}. Did you mean 'not'?", self.line));
+                return Err(format!("Unexpected character '!' at line {}. Did you mean 'not'?", self.line).into());
             })),
             '=' => Ok(Some(if self.match_next('=') {
-                Token::new(TokenKind::Eq, "==".to_string(), self.line)
+                Token::new(TokenKind::Eq, "==", self.line)
             } else if self.match_next('>') {
-                Token::new(TokenKind::Arrow, "=>".to_string(), self.line)
+                Token::new(TokenKind::Arrow, "=>", self.line)
             } else {
-                Token::new(TokenKind::Eq, "=".to_string(), self.line)
+                Token::new(TokenKind::Eq, "=", self.line)
             })),
             '<' => Ok(Some(if self.match_next('=') {
-                Token::new(TokenKind::Le, "<=".to_string(), self.line)
+                Token::new(TokenKind::Le, "<=", self.line)
             } else {
-                Token::new(TokenKind::Lt, "<".to_string(), self.line)
+                Token::new(TokenKind::Lt, "<", self.line)
             })),
             '>' => Ok(Some(if self.match_next('=') {
-                Token::new(TokenKind::Ge, ">=".to_string(), self.line)
+                Token::new(TokenKind::Ge, ">=", self.line)
             } else {
-                Token::new(TokenKind::Gt, ">".to_string(), self.line)
+                Token::new(TokenKind::Gt, ">", self.line)
             })),
             '\n' => Ok(Some(Token::new(
                 TokenKind::Newline,
-                "\n".to_string(),
+                "\n",
                 self.line,
             ))),
             '"' => Ok(Some(self.read_string()?)),
             '\'' => Ok(Some(self.read_char_literal()?)),
             c if c.is_ascii_digit() => Ok(Some(self.read_number(c))),
             c if c.is_alphabetic() || c == '_' => Ok(Some(self.read_ident(c))),
-            _ => Err(format!("Unexpected character '{ch}' at line {}", self.line)),
+            _ => Err(format!("Unexpected character '{ch}' at line {}", self.line).into()),
         }
     }
 
@@ -263,7 +268,7 @@ impl Lexer {
         }
     }
 
-    fn skip_block_comment(&mut self) -> Result<(), String> {
+    fn skip_block_comment(&mut self) -> Result<(), Cow<'static, str>> {
         while !self.is_at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
@@ -275,10 +280,10 @@ impl Lexer {
             }
             self.advance();
         }
-        Err(format!("Unterminated block comment at line {}", self.line))
+        Err(format!("Unterminated block comment at line {}", self.line).into())
     }
 
-    fn read_string(&mut self) -> Result<Token, String> {
+    fn read_string(&mut self) -> Result<Token, Cow<'static, str>> {
         let mut s = String::new();
         while !self.is_at_end() && self.peek() != '"' {
             if self.peek() == '\\' {
@@ -300,13 +305,13 @@ impl Lexer {
             }
         }
         if self.is_at_end() {
-            return Err(format!("Unterminated string at line {}", self.line));
+            return Err(format!("Unterminated string at line {}", self.line).into());
         }
         self.advance();
         Ok(Token::new(TokenKind::String, s, self.line))
     }
 
-    fn read_char_literal(&mut self) -> Result<Token, String> {
+    fn read_char_literal(&mut self) -> Result<Token, Cow<'static, str>> {
         let mut s = String::new();
         if !self.is_at_end() && self.peek() != '\'' {
             if self.peek() == '\\' {
@@ -322,7 +327,7 @@ impl Lexer {
             }
         }
         if self.is_at_end() || self.peek() != '\'' {
-            return Err(format!("Unterminated char literal at line {}", self.line));
+            return Err(format!("Unterminated char literal at line {}", self.line).into());
         }
         self.advance();
         Ok(Token::new(TokenKind::String, s, self.line))

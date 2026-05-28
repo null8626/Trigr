@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, RwLock}};
+use std::{borrow::Cow, collections::HashMap, fmt::Write, fs::{self, File}, io::{BufReader, BufWriter}, path::PathBuf, sync::{Arc, RwLock}};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trigger {
@@ -22,7 +23,7 @@ pub struct TriggerVar {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalVar {
-    pub id: String,
+    pub id: Uuid,
     pub name: String,
     pub script: String,
     pub enabled: bool,
@@ -64,57 +65,35 @@ impl TriggerManager {
     }
 
     fn load_triggers(file_path: &PathBuf) -> Vec<Trigger> {
-        if file_path.exists() {
-            match fs::read_to_string(file_path) {
-                Ok(content) => match serde_json::from_str::<TriggerFileData>(&content) {
-                    Ok(data) => data.triggers,
-                    Err(_) => vec![],
-                },
-                Err(_) => vec![],
-            }
-        } else {
-            vec![]
-        }
+        File::open(file_path).map_or(None, |file| serde_json::from_reader::<_, TriggerFileData>(BufReader::new(file)).map_or(None, |data| Some(data.triggers))).unwrap_or_default()
     }
 
     fn load_global_vars(file_path: &PathBuf) -> Vec<GlobalVar> {
-        if file_path.exists() {
-            match fs::read_to_string(file_path) {
-                Ok(content) => match serde_json::from_str::<GlobalVarFileData>(&content) {
-                    Ok(data) => data.global_vars,
-                    Err(_) => vec![],
-                },
-                Err(_) => vec![],
-            }
-        } else {
-            vec![]
-        }
+        File::open(file_path).map_or(None, |file| serde_json::from_reader::<_, GlobalVarFileData>(BufReader::new(file)).map_or(None, |data| Some(data.global_vars))).unwrap_or_default()
     }
 
-    fn save_triggers(&self) -> Result<(), String> {
+    fn save_triggers(&self) -> Result<(), Cow<'static, str>> {
         let triggers = self.triggers.read().map_err(|e| e.to_string())?;
         let data = TriggerFileData {
             triggers: triggers.clone(),
         };
-        let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
         if let Some(parent) = self.trigger_file_path.parent() {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        fs::write(&self.trigger_file_path, content).map_err(|e| e.to_string())?;
-        Ok(())
+
+        serde_json::to_writer_pretty(BufWriter::new(File::open(&self.trigger_file_path).map_err(|e| e.to_string())?), &data).map_err(|e| e.to_string().into())
     }
 
-    fn save_global_vars(&self) -> Result<(), String> {
+    fn save_global_vars(&self) -> Result<(), Cow<'static, str>> {
         let global_vars = self.global_vars.read().map_err(|e| e.to_string())?;
         let data = GlobalVarFileData {
             global_vars: global_vars.clone(),
         };
-        let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
         if let Some(parent) = self.global_var_file_path.parent() {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        fs::write(&self.global_var_file_path, content).map_err(|e| e.to_string())?;
-        Ok(())
+
+        serde_json::to_writer_pretty(BufWriter::new(File::open(&self.global_var_file_path).map_err(|e| e.to_string())?), &data).map_err(|e| e.to_string().into())
     }
 
     pub fn get_triggers(&self) -> Vec<Trigger> {
@@ -128,7 +107,7 @@ impl TriggerManager {
         category: String,
         args_mode: bool,
         vars: Vec<TriggerVar>,
-    ) -> Result<Trigger, String> {
+    ) -> Result<Trigger, Cow<'static, str>> {
         let now = chrono::Utc::now().to_rfc3339();
         let trigger = Trigger {
             id: uuid::Uuid::new_v4().to_string(),
@@ -158,13 +137,13 @@ impl TriggerManager {
         args_mode: Option<bool>,
         enabled: Option<bool>,
         vars: Option<Vec<TriggerVar>>,
-    ) -> Result<Trigger, String> {
+    ) -> Result<Trigger, Cow<'static, str>> {
         {
             let mut triggers = self.triggers.write().map_err(|e| e.to_string())?;
             let trigger = triggers
                 .iter_mut()
                 .find(|t| t.id == id)
-                .ok_or_else(|| "Trigger not found".to_string())?;
+                .ok_or(Cow::Borrowed("Trigger not found"))?;
 
             if let Some(v) = trigger_text { trigger.trigger_text = v; }
             if let Some(v) = replacement { trigger.replacement = v; }
@@ -182,13 +161,13 @@ impl TriggerManager {
         })
     }
 
-    pub fn delete_trigger(&self, id: String) -> Result<(), String> {
+    pub fn delete_trigger(&self, id: Uuid) -> Result<(), Cow<'static, str>> {
         {
             let mut triggers = self.triggers.write().map_err(|e| e.to_string())?;
             let len_before = triggers.len();
-            triggers.retain(|t| t.id != id);
+            triggers.retain(|t| t.id.starts_with("pkg") || t.id.parse::<Uuid>().unwrap() != id);
             if triggers.len() == len_before {
-                return Err("Trigger not found".to_string());
+                return Err("Trigger not found".into());
             }
         }
         self.save_triggers()
@@ -208,9 +187,9 @@ impl TriggerManager {
         self.global_vars.read().unwrap().clone()
     }
 
-    pub fn add_global_var(&self, name: String, script: String) -> Result<GlobalVar, String> {
+    pub fn add_global_var(&self, name: String, script: String) -> Result<GlobalVar, Cow<'static, str>> {
         let global_var = GlobalVar {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: uuid::Uuid::new_v4(),
             name,
             script,
             enabled: true,
@@ -225,17 +204,17 @@ impl TriggerManager {
 
     pub fn update_global_var(
         &self,
-        id: String,
+        id: Uuid,
         name: Option<String>,
         script: Option<String>,
         enabled: Option<bool>,
-    ) -> Result<GlobalVar, String> {
+    ) -> Result<GlobalVar, Cow<'static, str>> {
         {
             let mut global_vars = self.global_vars.write().map_err(|e| e.to_string())?;
             let gv = global_vars
                 .iter_mut()
                 .find(|g| g.id == id)
-                .ok_or_else(|| "Global variable not found".to_string())?;
+                .ok_or(Cow::Borrowed("Global variable not found"))?;
 
             if let Some(v) = name { gv.name = v; }
             if let Some(v) = script { gv.script = v; }
@@ -249,13 +228,13 @@ impl TriggerManager {
         })
     }
 
-    pub fn delete_global_var(&self, id: String) -> Result<(), String> {
+    pub fn delete_global_var(&self, id: Uuid) -> Result<(), Cow<'static, str>> {
         {
             let mut global_vars = self.global_vars.write().map_err(|e| e.to_string())?;
             let len_before = global_vars.len();
             global_vars.retain(|g| g.id != id);
             if global_vars.len() == len_before {
-                return Err("Global variable not found".to_string());
+                return Err("Global variable not found".into());
             }
         }
         self.save_global_vars()
@@ -276,8 +255,8 @@ impl TriggerManager {
     }
 
     pub fn resolve_replacement_with_args(&self, trigger: &Trigger, args: &[String]) -> String {
-        let mut result = trigger.replacement.clone();
-        let mut var_values: HashMap<String, String> = HashMap::new();
+        let mut result = trigger.replacement.to_string();
+        let mut var_values = HashMap::new();
 
         let global_vars = self.get_enabled_global_vars();
         for gv in &global_vars {
@@ -322,8 +301,9 @@ fn resolve_trill_expressions(
             let mut expr = String::new();
             let mut found_close = false;
             while let Some(&ch) = chars.peek() {
+                chars.next();
+
                 if ch == '}' {
-                    chars.next();
                     if chars.peek() == Some(&'}') {
                         chars.next();
                         found_close = true;
@@ -333,20 +313,19 @@ fn resolve_trill_expressions(
                     }
                 } else {
                     expr.push(ch);
-                    chars.next();
                 }
             }
+
             if found_close {
                 let trimmed = expr.trim();
                 let val = evaluate_script_with_args(trimmed, context, args);
                 if val == "{{script error}}" {
-                    result.push_str(&format!("{{{{{expr}}}}}"));
+                    write!(&mut result, "{{{{{expr}}}}}").unwrap();
                 } else {
                     result.push_str(&val);
                 }
             } else {
-                result.push_str("{{");
-                result.push_str(&expr);
+                write!(&mut result, "{{{{{expr}").unwrap();
             }
         } else {
             outside.push(ch);
@@ -378,29 +357,26 @@ fn evaluate_script_with_args(
     }
 }
 
+const DATE_REPLACEMENTS: [(&str, &str); 11] = [
+    ("{{date}}", "%Y-%m-%d"),
+    ("{{time}}", "%H:%M:%S"),
+    ("{{datetime}}", "%Y-%m-%d %H:%M:%S"),
+    ("{{year}}", "%Y"),
+    ("{{month}}", "%m"),
+    ("{{day}}", "%d"),
+    ("{{hour}}", "%H"),
+    ("{{minute}}", "%M"),
+    ("{{second}}", "%S"),
+    ("{{weekday}}", "%A"),
+    ("{{shortdate}}", "%m/%d/%Y")
+];
+
 fn resolve_builtin_vars(text: &str) -> String {
     let now = chrono::Local::now();
     let mut result = text.to_string();
 
-    let date_replacements: Vec<(String, String)> = vec![
-        ("{{date}}".into(), now.format("%Y-%m-%d").to_string()),
-        ("{{time}}".into(), now.format("%H:%M:%S").to_string()),
-        (
-            "{{datetime}}".into(),
-            now.format("%Y-%m-%d %H:%M:%S").to_string(),
-        ),
-        ("{{year}}".into(), now.format("%Y").to_string()),
-        ("{{month}}".into(), now.format("%m").to_string()),
-        ("{{day}}".into(), now.format("%d").to_string()),
-        ("{{hour}}".into(), now.format("%H").to_string()),
-        ("{{minute}}".into(), now.format("%M").to_string()),
-        ("{{second}}".into(), now.format("%S").to_string()),
-        ("{{weekday}}".into(), now.format("%A").to_string()),
-        ("{{shortdate}}".into(), now.format("%m/%d/%Y").to_string()),
-    ];
-
-    for (placeholder, value) in &date_replacements {
-        result = result.replace(placeholder, value);
+    for (placeholder, value) in &DATE_REPLACEMENTS {
+        result = result.replace(placeholder, &now.format(value).to_string());
     }
 
     result
