@@ -1,4 +1,13 @@
 #[macro_export]
+macro_rules! optional_fill {
+    ($target:ident, $($identifier:ident),+) => {$(
+        if let Some($identifier) = $identifier { $target.$identifier = $identifier; }
+    )+};
+}
+
+pub(super) use optional_fill;
+
+#[macro_export]
 macro_rules! tauri_reexport {
     (
         impl $t:ty {$(

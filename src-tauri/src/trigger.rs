@@ -1,4 +1,4 @@
-use super::util::tauri_reexport;
+use super::util::{optional_fill, tauri_reexport};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, fmt::Write, fs::{self, File}, io::{BufReader, BufWriter}, path::PathBuf, sync::{Arc, RwLock}};
 use uuid::Uuid;
@@ -224,12 +224,7 @@ tauri_reexport! {
                     .find(|t| t.id == id)
                     .ok_or_else(|| "Trigger not found".to_string())?;
 
-                if let Some(v) = trigger_text { trigger.trigger_text = v; }
-                if let Some(v) = replacement { trigger.replacement = v; }
-                if let Some(v) = category { trigger.category = v; }
-                if let Some(v) = args_mode { trigger.args_mode = v; }
-                if let Some(v) = enabled { trigger.enabled = v; }
-                if let Some(v) = vars { trigger.vars = v; }
+                optional_fill!(trigger, trigger_text, replacement, category, args_mode, enabled, vars);
 
                 trigger.updated_at = chrono::Utc::now().to_rfc3339();
                 Ok(trigger.clone())
@@ -272,9 +267,7 @@ tauri_reexport! {
                 .find(|g| g.id == id)
                 .ok_or(Cow::Borrowed("Global variable not found"))?;
 
-            if let Some(v) = name { gv.name = v; }
-            if let Some(v) = script { gv.script = v; }
-            if let Some(v) = enabled { gv.enabled = v; }
+            optional_fill!(gv, name, script, enabled);
 
             let result = Ok(gv.clone());
 
