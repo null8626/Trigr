@@ -1,3 +1,4 @@
+use super::util::tauri_reexport;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, fmt::Write, fs::{self, File}, io::{BufReader, BufWriter}, path::PathBuf, sync::{Arc, RwLock}};
 use uuid::Uuid;
@@ -96,69 +97,14 @@ impl TriggerManager {
         serde_json::to_writer_pretty(BufWriter::new(File::open(&self.global_var_file_path).map_err(|e| e.to_string())?), &data).map_err(|e| e.to_string().into())
     }
 
-    pub fn get_triggers(&self) -> Vec<Trigger> {
-        self.triggers.read().expect("trigger read lock poisoned").clone()
-    }
-
-    pub fn add_trigger(
-        &self,
-        trigger_text: String,
-        replacement: String,
-        category: String,
-        args_mode: bool,
-        vars: Vec<TriggerVar>,
-    ) -> Result<Trigger, Cow<'static, str>> {
-        let now = chrono::Utc::now().to_rfc3339();
-        let trigger = Trigger {
-            id: uuid::Uuid::new_v4().to_string(),
-            trigger_text,
-            replacement,
-            enabled: true,
-            category,
-            args_mode,
-            vars,
-            created_at: now.clone(),
-            updated_at: now,
-        };
-        {
-            let mut triggers = self.triggers.write().map_err(|e| e.to_string())?;
-            triggers.push(trigger.clone());
-        }
-        self.save_triggers()?;
-        Ok(trigger)
-    }
-
-    pub fn update_trigger(
-        &self,
-        id: String,
-        trigger_text: Option<String>,
-        replacement: Option<String>,
-        category: Option<String>,
-        args_mode: Option<bool>,
-        enabled: Option<bool>,
-        vars: Option<Vec<TriggerVar>>,
-    ) -> Result<Trigger, Cow<'static, str>> {
-        {
-            let mut triggers = self.triggers.write().map_err(|e| e.to_string())?;
-            let trigger = triggers
-                .iter_mut()
-                .find(|t| t.id == id)
-                .ok_or(Cow::Borrowed("Trigger not found"))?;
-
-            if let Some(v) = trigger_text { trigger.trigger_text = v; }
-            if let Some(v) = replacement { trigger.replacement = v; }
-            if let Some(v) = category { trigger.category = v; }
-            if let Some(v) = args_mode { trigger.args_mode = v; }
-            if let Some(v) = enabled { trigger.enabled = v; }
-            if let Some(v) = vars { trigger.vars = v; }
-
-            trigger.updated_at = chrono::Utc::now().to_rfc3339();
-            Ok(trigger.clone())
-        }
-        .and_then(|trigger| {
-            self.save_triggers()?;
-            Ok(trigger)
-        })
+    pub fn get_enabled_triggers(&self) -> Vec<Trigger> {
+        self.triggers
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|t| t.enabled)
+            .cloned()
+            .collect()
     }
 
     pub fn delete_trigger(&self, id: Uuid) -> Result<(), Cow<'static, str>> {
@@ -171,61 +117,6 @@ impl TriggerManager {
             }
         }
         self.save_triggers()
-    }
-
-    pub fn get_enabled_triggers(&self) -> Vec<Trigger> {
-        self.triggers
-            .read()
-            .unwrap()
-            .iter()
-            .filter(|t| t.enabled)
-            .cloned()
-            .collect()
-    }
-
-    pub fn get_global_vars(&self) -> Vec<GlobalVar> {
-        self.global_vars.read().unwrap().clone()
-    }
-
-    pub fn add_global_var(&self, name: String, script: String) -> Result<GlobalVar, Cow<'static, str>> {
-        let global_var = GlobalVar {
-            id: uuid::Uuid::new_v4(),
-            name,
-            script,
-            enabled: true,
-        };
-        {
-            let mut global_vars = self.global_vars.write().map_err(|e| e.to_string())?;
-            global_vars.push(global_var.clone());
-        }
-        self.save_global_vars()?;
-        Ok(global_var)
-    }
-
-    pub fn update_global_var(
-        &self,
-        id: Uuid,
-        name: Option<String>,
-        script: Option<String>,
-        enabled: Option<bool>,
-    ) -> Result<GlobalVar, Cow<'static, str>> {
-        {
-            let mut global_vars = self.global_vars.write().map_err(|e| e.to_string())?;
-            let gv = global_vars
-                .iter_mut()
-                .find(|g| g.id == id)
-                .ok_or(Cow::Borrowed("Global variable not found"))?;
-
-            if let Some(v) = name { gv.name = v; }
-            if let Some(v) = script { gv.script = v; }
-            if let Some(v) = enabled { gv.enabled = v; }
-
-            Ok(gv.clone())
-        }
-        .and_then(|gv| {
-            self.save_global_vars()?;
-            Ok(gv)
-        })
     }
 
     pub fn delete_global_var(&self, id: Uuid) -> Result<(), Cow<'static, str>> {
@@ -279,6 +170,120 @@ impl TriggerManager {
         result = resolve_trill_expressions(&result, &var_values, args);
 
         result
+    }
+}
+
+tauri_reexport! {
+    impl TriggerManager {
+        pub fn get_triggers(self: &Self) -> Vec<Trigger> {
+            self.triggers.read().expect("trigger read lock poisoned").clone()
+        }
+
+        pub fn add_trigger(
+            self: &Self,
+            trigger_text: String,
+            replacement: String,
+            category: String,
+            args_mode: bool,
+            vars: Vec<TriggerVar>
+        ) -> Result<Trigger, String> {
+            let now = chrono::Utc::now().to_rfc3339();
+            let trigger = Trigger {
+                id: uuid::Uuid::new_v4().to_string(),
+                trigger_text,
+                replacement,
+                enabled: true,
+                category,
+                args_mode,
+                vars,
+                created_at: now.clone(),
+                updated_at: now,
+            };
+            {
+                let mut triggers = self.triggers.write().map_err(|e| e.to_string())?;
+                triggers.push(trigger.clone());
+            }
+            self.save_triggers()?;
+            Ok(trigger)
+        }
+
+        pub fn update_trigger(
+            self: &Self,
+            id: String,
+            trigger_text: Option<String>,
+            replacement: Option<String>,
+            category: Option<String>,
+            args_mode: Option<bool>,
+            enabled: Option<bool>,
+            vars: Option<Vec<TriggerVar>>
+        ) -> Result<Trigger, String> {
+            {
+                let mut triggers = self.triggers.write().map_err(|e| e.to_string())?;
+                let trigger = triggers
+                    .iter_mut()
+                    .find(|t| t.id == id)
+                    .ok_or_else(|| "Trigger not found".to_string())?;
+
+                if let Some(v) = trigger_text { trigger.trigger_text = v; }
+                if let Some(v) = replacement { trigger.replacement = v; }
+                if let Some(v) = category { trigger.category = v; }
+                if let Some(v) = args_mode { trigger.args_mode = v; }
+                if let Some(v) = enabled { trigger.enabled = v; }
+                if let Some(v) = vars { trigger.vars = v; }
+
+                trigger.updated_at = chrono::Utc::now().to_rfc3339();
+                Ok(trigger.clone())
+            }
+            .and_then(|trigger| {
+                self.save_triggers()?;
+                Ok(trigger)
+            })
+        }
+
+        pub fn get_global_vars(self: &Self) -> Vec<GlobalVar> {
+            self.global_vars.read().unwrap().clone()
+        }
+
+        pub fn add_global_var(self: &Self, name: String, script: String) -> Result<GlobalVar, String> {
+            let global_var = GlobalVar {
+                id: uuid::Uuid::new_v4().to_string(),
+                name,
+                script,
+                enabled: true,
+            };
+            {
+                let mut global_vars = self.global_vars.write().map_err(|e| e.to_string())?;
+                global_vars.push(global_var.clone());
+            }
+            self.save_global_vars()?;
+            Ok(global_var)
+        }
+
+        pub fn update_global_var(
+            self: &Self,
+            id: String,
+            name: Option<String>,
+            script: Option<String>,
+            enabled: Option<bool>
+        ) -> Result<GlobalVar, String> {
+            {
+                let mut global_vars = self.global_vars.write().map_err(|e| e.to_string())?;
+                let gv = global_vars
+                    .iter_mut()
+                    .find(|g| g.id == id)
+                    .ok_or_else(|| "Global variable not found".to_string())?;
+
+                if let Some(v) = name { gv.name = v; }
+                if let Some(v) = script { gv.script = v; }
+                if let Some(v) = enabled { gv.enabled = v; }
+
+                Ok(gv.clone())
+            }
+            .and_then(|gv| {
+                self.save_global_vars()?;
+                Ok(gv)
+            })
+        }
     }
 }
 

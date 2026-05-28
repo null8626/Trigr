@@ -1,4 +1,4 @@
-use crate::trigger::Trigger;
+use super::{trigger::Trigger, util::tauri_reexport};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, fs::{self, File}, io::{BufReader, BufWriter}, path::PathBuf, sync::{Arc, RwLock}};
 
@@ -56,45 +56,6 @@ impl PackageManager {
         serde_json::to_writer_pretty(BufWriter::new(File::open(&self.file_path).map_err(|e| e.to_string())?), &*state).map_err(|e| e.to_string().into())
     }
 
-    pub fn get_available_packages(&self) -> Vec<Package> {
-        if !self.packages_dir.exists() {
-            return vec![];
-        }
-        let mut packages = vec![];
-        if let Ok(entries) = fs::read_dir(&self.packages_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                let path = entry.path();
-                if !path.is_dir() {
-                    continue;
-                }
-                let meta_path = path.join(META_FILENAME);
-                let triggers_path = path.join(TRIGGERS_FILENAME);
-                if !meta_path.exists() || !triggers_path.exists() {
-                    continue;
-                }
-                if let (Ok(meta_content), Ok(triggers_content)) = (
-                    File::open(&meta_path),
-                    File::open(&triggers_path),
-                ) && let (Ok(meta), Ok(trigger_map)) = (serde_json::from_reader::<_, PackageMeta>(BufReader::new(meta_content)), serde_json::from_reader::<_, HashMap<String, String>>(BufReader::new(triggers_content))) {
-                    let triggers = trigger_map
-                        .into_iter()
-                        .map(|(trigger, replacement)| {
-                            Self::make_trigger(&meta.id, trigger, replacement)
-                        })
-                        .collect();
-                    packages.push(Package {
-                        id: meta.id,
-                        name: meta.name,
-                        description: meta.description,
-                        version: meta.version,
-                        triggers,
-                    });
-                }
-            }
-        }
-        packages
-    }
-
     fn make_trigger(category: &str, trigger_text: String, replacement: String) -> Trigger {
         let now = chrono::Utc::now().to_rfc3339();
         let id = trigger_text.replace(":", "").to_lowercase();
@@ -111,35 +72,6 @@ impl PackageManager {
         }
     }
 
-    pub fn get_installed_packages(&self) -> Vec<String> {
-        self.state.read().unwrap().installed.clone()
-    }
-
-    pub fn install_package(&self, id: String) -> Result<(), Cow<'static, str>> {
-        {
-            let mut state = self.state.write().map_err(|e| e.to_string())?;
-            if !self.get_available_packages().iter().any(|p| p.id == id) {
-                return Err("Package not found".into());
-            }
-            if state.installed.contains(&id) {
-                return Err("Package already installed".into());
-            }
-            state.installed.push(id);
-        }
-        self.save()
-    }
-
-    pub fn uninstall_package(&self, id: String) -> Result<(), Cow<'static, str>> {
-        {
-            let mut state = self.state.write().map_err(|e| e.to_string())?;
-            if !state.installed.contains(&id) {
-                return Err("Package not installed".into());
-            }
-            state.installed.retain(|p| p != &id);
-        }
-        self.save()
-    }
-
     pub fn get_package_triggers(&self) -> Vec<Trigger> {
         let state = self.state.read().unwrap();
         let installed_ids = state.installed.clone();
@@ -152,5 +84,77 @@ impl PackageManager {
             }
         }
         triggers
+    }
+}
+
+tauri_reexport! {
+    impl PackageManager {
+        pub fn get_available_packages(self: &Self) -> Vec<Package> {
+            if !self.packages_dir.exists() {
+                return vec![];
+            }
+            let mut packages = vec![];
+            if let Ok(entries) = fs::read_dir(&self.packages_dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if !path.is_dir() {
+                        continue;
+                    }
+                    let meta_path = path.join(META_FILENAME);
+                    let triggers_path = path.join(TRIGGERS_FILENAME);
+                    if !meta_path.exists() || !triggers_path.exists() {
+                        continue;
+                    }
+                    if let (Ok(meta_content), Ok(triggers_content)) = (
+                        fs::read_to_string(&meta_path),
+                        fs::read_to_string(&triggers_path),
+                    ) && let (Ok(meta), Ok(trigger_map)) = (serde_json::from_str::<PackageMeta>(&meta_content), serde_json::from_str::<HashMap<String, String>>(&triggers_content)) {
+                        let triggers = trigger_map
+                            .into_iter()
+                            .map(|(trigger, replacement)| {
+                                Self::make_trigger(&meta.id, trigger, replacement)
+                            })
+                            .collect();
+                        packages.push(Package {
+                            id: meta.id,
+                            name: meta.name,
+                            description: meta.description,
+                            version: meta.version,
+                            triggers,
+                        });
+                    }
+                }
+            }
+            packages
+        }
+
+        pub fn get_installed_packages(self: &Self) -> Vec<String> {
+            self.state.read().unwrap().installed.clone()
+        }
+
+        pub fn install_package(self: &Self, id: String) -> Result<(), String> {
+            {
+                let mut state = self.state.write().map_err(|e| e.to_string())?;
+                if !self.get_available_packages().iter().any(|p| p.id == id) {
+                    return Err("Package not found".to_string());
+                }
+                if state.installed.contains(&id) {
+                    return Err("Package already installed".to_string());
+                }
+                state.installed.push(id);
+            }
+            self.save()
+        }
+
+        pub fn uninstall_package(self: &Self, id: String) -> Result<(), String> {
+            {
+                let mut state = self.state.write().map_err(|e| e.to_string())?;
+                if !state.installed.contains(&id) {
+                    return Err("Package not installed".to_string());
+                }
+                state.installed.retain(|p| p != &id);
+            }
+            self.save()
+        }
     }
 }

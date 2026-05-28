@@ -3,6 +3,7 @@ mod package;
 mod script;
 mod settings;
 mod trigger;
+mod util;
 
 use package::PackageManager;
 use std::{borrow::Cow, ffi::CString, fs::{self, File}, io::{BufReader, BufWriter}, path::PathBuf, ptr::null_mut, sync::{Arc, Mutex}};
@@ -118,51 +119,6 @@ fn get_all_data(manager: State<Mutex<TriggerManager>>) -> AllData {
 }
 
 #[tauri::command]
-fn get_triggers(manager: State<Mutex<TriggerManager>>) -> Vec<trigger::Trigger> {
-    manager.lock().unwrap().get_triggers()
-}
-
-#[tauri::command]
-fn add_trigger(
-    manager: State<Mutex<TriggerManager>>,
-    trigger_text: String,
-    replacement: String,
-    category: String,
-    args_mode: bool,
-    vars: Vec<TriggerVar>,
-) -> Result<trigger::Trigger, Cow<'static, str>> {
-    manager.lock().unwrap().add_trigger(
-        trigger_text,
-        replacement,
-        category,
-        args_mode,
-        vars,
-    )
-}
-
-#[tauri::command]
-fn update_trigger(
-    manager: State<Mutex<TriggerManager>>,
-    id: String,
-    trigger_text: Option<String>,
-    replacement: Option<String>,
-    category: Option<String>,
-    args_mode: Option<bool>,
-    enabled: Option<bool>,
-    vars: Option<Vec<TriggerVar>>,
-) -> Result<trigger::Trigger, Cow<'static, str>> {
-    manager.lock().unwrap().update_trigger(
-        id,
-        trigger_text,
-        replacement,
-        category,
-        args_mode,
-        enabled,
-        vars,
-    )
-}
-
-#[tauri::command]
 fn delete_item(manager: State<Mutex<TriggerManager>>, item_type: String, id: Uuid) -> Result<(), Cow<'static, str>> {
     let m = manager.lock().unwrap();
     match item_type.as_str() {
@@ -170,34 +126,6 @@ fn delete_item(manager: State<Mutex<TriggerManager>>, item_type: String, id: Uui
         "global_var" => m.delete_global_var(id),
         _ => Err(format!("Unknown item type: {item_type}").into()),
     }
-}
-
-#[tauri::command]
-fn get_global_vars(manager: State<Mutex<TriggerManager>>) -> Vec<GlobalVar> {
-    manager.lock().unwrap().get_global_vars()
-}
-
-#[tauri::command]
-fn add_global_var(
-    manager: State<Mutex<TriggerManager>>,
-    name: String,
-    script: String,
-) -> Result<GlobalVar, Cow<'static, str>> {
-    manager.lock().unwrap().add_global_var(name, script)
-}
-
-#[tauri::command]
-fn update_global_var(
-    manager: State<Mutex<TriggerManager>>,
-    id: Uuid,
-    name: Option<String>,
-    script: Option<String>,
-    enabled: Option<bool>,
-) -> Result<GlobalVar, Cow<'static, str>> {
-    manager
-        .lock()
-        .unwrap()
-        .update_global_var(id, name, script, enabled)
 }
 
 #[tauri::command]
@@ -332,32 +260,6 @@ fn update_settings(
 }
 
 #[tauri::command]
-fn list_packages(package_mgr: State<Arc<Mutex<PackageManager>>>) -> Vec<package::Package> {
-    package_mgr.lock().unwrap().get_available_packages()
-}
-
-#[tauri::command]
-fn get_installed_packages(package_mgr: State<Arc<Mutex<PackageManager>>>) -> Vec<String> {
-    package_mgr.lock().unwrap().get_installed_packages()
-}
-
-#[tauri::command]
-fn install_package(
-    package_mgr: State<Arc<Mutex<PackageManager>>>,
-    id: String,
-) -> Result<(), Cow<'static, str>> {
-    package_mgr.lock().unwrap().install_package(id)
-}
-
-#[tauri::command]
-fn uninstall_package(
-    package_mgr: State<Arc<Mutex<PackageManager>>>,
-    id: String,
-) -> Result<(), Cow<'static, str>> {
-    package_mgr.lock().unwrap().uninstall_package(id)
-}
-
-#[tauri::command]
 fn update_tray_icon(app: tauri::AppHandle, _theme_color: String) -> Result<(), Cow<'static, str>> {
     if let Some(tray) = app.tray_by_id("main") {
         let _ = tray.set_icon(Some(tauri::include_image!("icons/64x64.png")));
@@ -457,13 +359,13 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_all_data,
-            get_triggers,
-            add_trigger,
-            update_trigger,
+            trigger::get_triggers,
+            trigger::add_trigger,
+            trigger::update_trigger,
             delete_item,
-            get_global_vars,
-            add_global_var,
-            update_global_var,
+            trigger::get_global_vars,
+            trigger::add_global_var,
+            trigger::update_global_var,
             preview_replacement,
             evaluate_script,
             preview_script,
@@ -474,10 +376,10 @@ pub fn run() {
             hide_window,
             get_settings,
             update_settings,
-            list_packages,
-            get_installed_packages,
-            install_package,
-            uninstall_package,
+            package::get_available_packages,
+            package::get_installed_packages,
+            package::install_package,
+            package::uninstall_package,
             update_tray_icon
         ])
         .run(tauri::generate_context!())

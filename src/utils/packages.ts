@@ -22,7 +22,7 @@ export async function uninstallPackage(id: string): Promise<void> {
 
 export async function loadPackageData(): Promise<{ packages: Package[]; installed: Set<string> }> {
   const [packages, installed] = await Promise.all([
-    invoke<Package[]>("list_packages"),
+    invoke<Package[]>("get_available_packages"),
     invoke<string[]>("get_installed_packages"),
   ]);
   return { packages, installed: new Set(installed) };
