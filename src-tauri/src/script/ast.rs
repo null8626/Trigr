@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, fmt::{self, Display, Formatter}};
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -95,43 +95,57 @@ pub enum Value<'v> {
 }
 
 impl Value<'_> {
-    pub fn to_string(&self) -> String {
-        match self {
-            Value::Num(n) => {
-                if n.fract() == 0.0 && n.abs() < 1e15 {
-                    format!("{}", *n as i64)
-                } else {
-                    format!("{n}")
-                }
-            }
-            Value::Str(s) => s.to_string(),
-            Value::Bool(b) => b.to_string(),
-            Value::Nil => String::new(),
-            Value::List(items) => {
-                let strs = items.iter().map(|v| v.to_string()).collect::<Vec<_>>();
-                strs.join(", ")
-            }
-            Value::Map(_) => "[map]".to_string(),
-            Value::Fn { .. } => "[function]".to_string(),
-        }
-    }
-
     pub fn as_num(&self) -> Option<f64> {
         match self {
-            Value::Num(n) => Some(*n),
-            Value::Str(s) => s.parse::<f64>().ok(),
+            Self::Num(n) => Some(*n),
+            Self::Str(s) => s.parse::<f64>().ok(),
             _ => None,
         }
     }
 
-    pub fn as_bool(&self) -> bool {
+    pub const fn as_bool(&self) -> bool {
         match self {
-            Value::Bool(b) => *b,
-            Value::Num(n) => *n != 0.0,
-            Value::Str(s) => !s.is_empty(),
-            Value::Nil => false,
-            Value::Fn { .. } => true,
+            Self::Bool(b) => *b,
+            Self::Num(n) => *n != 0.0,
+            Self::Str(s) => match s {
+                Cow::Borrowed(s) => !s.is_empty(),
+                Cow::Owned(s) => s.len() != 0,
+            },
+            Self::Nil => false,
+            Self::Fn { .. } => true,
             _ => true,
+        }
+    }
+}
+
+impl Display for Value<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Num(n) => {
+                if n.fract() == 0.0 && n.abs() < 1e15 {
+                    write!(f, "{}", *n as i64)
+                } else {
+                    Display::fmt(n, f)
+                }
+            }
+            Self::Str(s) => Display::fmt(s, f),
+            Self::Bool(b) => Display::fmt(b, f),
+            Self::Nil => Ok(()),
+            Self::List(items) => {
+                if !items.is_empty() {
+                    let last_index = items.len() - 1;
+
+                    for item in items.iter().take(last_index) {
+                        Display::fmt(item, f)?;
+                    }
+
+                    Display::fmt(&items[last_index], f)
+                } else {
+                    Ok(())
+                }
+            }
+            Self::Map(_) => f.write_str("[map]"),
+            Self::Fn { .. } => f.write_str("[function]"),
         }
     }
 }

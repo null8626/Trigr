@@ -138,9 +138,9 @@ impl<'v> Evaluator<'v> {
 
                 (Value::Num(a), Value::Str(b)) => Ok(Value::Str(format!("{a}{b}").into())),
 
-                (Value::Str(a), _) => Ok(Value::Str(format!("{a}{}", r.to_string()).into())),
+                (Value::Str(a), _) => Ok(Value::Str(format!("{a}{r}").into())),
 
-                (_, Value::Str(b)) => Ok(Value::Str(format!("{}{b}", l.to_string()).into())),
+                (_, Value::Str(b)) => Ok(Value::Str(format!("{l}{b}").into())),
 
                 _ => Err(format!("Cannot add {l:?} and {r:?}").into()),
             },
