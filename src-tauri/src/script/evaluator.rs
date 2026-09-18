@@ -39,7 +39,7 @@ impl<'v> Evaluator<'v> {
                 let mut matched = false;
                 let mut result = Value::Nil;
                 for (pattern, arm) in arms {
-                    if self.values_equal(&val, pattern) {
+                    if Self::values_equal(&val, pattern) {
                         result = self.evaluate(arm)?;
                         matched = true;
                         break;
@@ -168,8 +168,8 @@ impl<'v> Evaluator<'v> {
                 let b = r.as_num().ok_or(Cow::Borrowed("Right side must be a number"))?;
                 Ok(Value::Num(a % b))
             }
-            BinaryOp::Eq => Ok(Value::Bool(self.values_equal(&l, &r))),
-            BinaryOp::Ne => Ok(Value::Bool(!self.values_equal(&l, &r))),
+            BinaryOp::Eq => Ok(Value::Bool(Self::values_equal(&l, &r))),
+            BinaryOp::Ne => Ok(Value::Bool(!Self::values_equal(&l, &r))),
             BinaryOp::Lt => Ok(Value::Bool(
                 if let (Value::Num(a), Value::Num(b)) = (&l, &r) {
                     a < b
@@ -274,18 +274,18 @@ impl<'v> Evaluator<'v> {
             "upper" | "lower" | "trim" | "trim_start" | "trim_end" | "len" | "length"
             | "repeat" | "replace" | "slice" | "split" | "contains" | "starts_with"
             | "ends_with" | "substr" | "reverse" | "pad_start" | "pad_end" | "concat" | "title"
-            | "join" => self.call_str(name, args),
+            | "join" => Self::call_str(name, args),
 
             "to_num" | "number" | "to_str" | "string" | "floor" | "ceil" | "ceiling" | "round"
-            | "abs" | "min" | "max" | "clamp" | "rand" | "random" => self.call_math(name, args),
+            | "abs" | "min" | "max" | "clamp" | "rand" | "random" => Self::call_math(name, args),
 
             "list" | "choice" | "first" | "last" | "map" | "filter" | "sort" | "join_list" => {
                 self.call_list(name, args)
             }
 
-            "now" | "today" | "date_add" | "date_format" => self.call_date(name, args),
+            "now" | "today" | "date_add" | "date_format" => Self::call_date(name, args),
 
-            "if_then_else" | "__builtin_or" | "__builtin_and" => self.call_logic(name, args),
+            "if_then_else" | "__builtin_or" | "__builtin_and" => Self::call_logic(name, args),
 
             _ => Ok(self
                 .env
@@ -295,21 +295,21 @@ impl<'v> Evaluator<'v> {
         }
     }
 
-    fn arg1_str(&self, args: &[Value<'v>]) -> String {
+    fn arg1_str(args: &[Value<'v>]) -> String {
         args.first().map(std::string::ToString::to_string).unwrap_or_default()
     }
 
-    fn call_str(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
+    fn call_str(name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         match name {
-            "upper" => Ok(Value::Str(self.arg1_str(args).to_uppercase().into())),
-            "lower" => Ok(Value::Str(self.arg1_str(args).to_lowercase().into())),
-            "trim" => Ok(Value::Str(self.arg1_str(args).trim().to_string().into())),
-            "trim_start" => Ok(Value::Str(self.arg1_str(args).trim_start().to_string().into())),
-            "trim_end" => Ok(Value::Str(self.arg1_str(args).trim_end().to_string().into())),
+            "upper" => Ok(Value::Str(Self::arg1_str(args).to_uppercase().into())),
+            "lower" => Ok(Value::Str(Self::arg1_str(args).to_lowercase().into())),
+            "trim" => Ok(Value::Str(Self::arg1_str(args).trim().to_string().into())),
+            "trim_start" => Ok(Value::Str(Self::arg1_str(args).trim_start().to_string().into())),
+            "trim_end" => Ok(Value::Str(Self::arg1_str(args).trim_end().to_string().into())),
             "len" | "length" => match args.first() {
                 Some(Value::List(items)) => Ok(Value::Num(items.len() as f64)),
                 Some(Value::Str(s)) => Ok(Value::Num(s.chars().count() as f64)),
-                _ => Ok(Value::Num(self.arg1_str(args).chars().count() as f64)),
+                _ => Ok(Value::Num(Self::arg1_str(args).chars().count() as f64)),
             },
             "repeat" => {
                 let s = args.first().ok_or(Cow::Borrowed("repeat requires a string"))?.to_string();
@@ -455,7 +455,7 @@ impl<'v> Evaluator<'v> {
                 Ok(Value::Str(parts.join("").into()))
             }
             "title" => {
-                let s = self.arg1_str(args);
+                let s = Self::arg1_str(args);
                 let mut result = String::with_capacity(s.len());
                 let mut upper = true;
                 for c in s.chars() {
@@ -487,10 +487,10 @@ impl<'v> Evaluator<'v> {
         }
     }
 
-    fn call_math(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
+    fn call_math(name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         match name {
             "to_num" | "number" => {
-                let s = self.arg1_str(args);
+                let s = Self::arg1_str(args);
                 s.parse::<f64>()
                     .map(Value::Num)
                     .map_err(|_| format!("Cannot convert '{s}' to number").into())
@@ -706,7 +706,7 @@ impl<'v> Evaluator<'v> {
         }
     }
 
-    fn call_date(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
+    fn call_date(name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         match name {
             "now" => {
                 let fmt = args
@@ -763,7 +763,7 @@ impl<'v> Evaluator<'v> {
         }
     }
 
-    fn call_logic(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
+    fn call_logic(name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
         match name {
             "if_then_else" => {
                 let cond = args.first().ok_or(Cow::Borrowed("if_then_else requires 3 arguments"))?;
@@ -781,7 +781,7 @@ impl<'v> Evaluator<'v> {
         }
     }
 
-    fn values_equal(&self, a: &Value, b: &Value) -> bool {
+    fn values_equal(a: &Value, b: &Value) -> bool {
         match (a, b) {
             (Value::Num(x), Value::Num(y)) => (x - y).abs() < f64::EPSILON,
             (Value::Str(x), Value::Str(y)) => x == y,

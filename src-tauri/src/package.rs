@@ -58,7 +58,7 @@ impl PackageManager {
 
     fn make_trigger(category: &str, trigger_text: String, replacement: String) -> Trigger {
         let now = chrono::Utc::now().to_rfc3339();
-        let id = trigger_text.replace(":", "").to_lowercase();
+        let id = trigger_text.replace(':', "").to_lowercase();
         Trigger {
             id: format!("pkg:{id}"),
             trigger_text,
