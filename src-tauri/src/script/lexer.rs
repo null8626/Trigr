@@ -292,7 +292,6 @@ impl Lexer {
                     'n' => s.push('\n'),
                     't' => s.push('\t'),
                     'r' => s.push('\r'),
-                    '\\' => s.push('\\'),
                     '"' => s.push('"'),
                     _ => s.push('\\'),
                 }

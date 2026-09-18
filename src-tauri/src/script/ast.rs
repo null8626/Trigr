@@ -112,7 +112,6 @@ impl Value<'_> {
                 Cow::Owned(s) => !s.is_empty(),
             },
             Self::Nil => false,
-            Self::Fn { .. } => true,
             _ => true,
         }
     }
