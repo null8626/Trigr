@@ -167,7 +167,7 @@ fn try_expand_with_args(buffer: &str, manager: &TriggerManager) -> bool {
             let args = args_str
                 .split_whitespace()
                 .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .collect::<Vec<_>>();
 
             let backspace_count = buffer[trigger_start..].chars().count() + 1;
@@ -175,10 +175,9 @@ fn try_expand_with_args(buffer: &str, manager: &TriggerManager) -> bool {
             let resolved = manager.resolve_replacement_with_args(trigger, &args);
 
             EXPANDING.store(true, Ordering::SeqCst);
-            let resolved_clone = resolved.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_millis(80));
-                expand_text(backspace_count, &resolved_clone);
+                expand_text(backspace_count, &resolved);
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 EXPANDING.store(false, Ordering::SeqCst);
             });
@@ -222,10 +221,9 @@ fn check_and_expand(
             let resolved = manager.resolve_replacement(trigger);
 
             EXPANDING.store(true, Ordering::SeqCst);
-            let resolved_clone = resolved.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_millis(30));
-                expand_text(backspace_count, &resolved_clone);
+                expand_text(backspace_count, &resolved);
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 EXPANDING.store(false, Ordering::SeqCst);
             });

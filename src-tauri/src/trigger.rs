@@ -311,9 +311,9 @@ fn resolve_trill_expressions(
                         chars.next();
                         found_close = true;
                         break;
-                    } else {
-                        expr.push('}');
                     }
+
+                    expr.push('}');
                 } else {
                     expr.push(ch);
                 }

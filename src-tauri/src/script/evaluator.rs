@@ -296,7 +296,7 @@ impl<'v> Evaluator<'v> {
     }
 
     fn arg1_str(&self, args: &[Value<'v>]) -> String {
-        args.first().map(|v| v.to_string()).unwrap_or_default()
+        args.first().map(std::string::ToString::to_string).unwrap_or_default()
     }
 
     fn call_str(&mut self, name: &str, args: &[Value<'v>]) -> Result<Value<'v>, Cow<'static, str>> {
@@ -315,7 +315,7 @@ impl<'v> Evaluator<'v> {
                 let s = args.first().ok_or(Cow::Borrowed("repeat requires a string"))?.to_string();
                 let n = args
                     .get(1)
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("repeat requires a count"))? as usize;
                 Ok(Value::Str(s.repeat(n).into()))
             }
@@ -338,11 +338,11 @@ impl<'v> Evaluator<'v> {
                 let s = args.first().ok_or(Cow::Borrowed("slice requires 3 arguments"))?.to_string();
                 let start = args
                     .get(1)
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("start must be a number"))? as usize;
                 let end = args
                     .get(2)
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("end must be a number"))? as usize;
                 let chars = s.chars().collect::<Vec<_>>();
                 if start > chars.len() || end > chars.len() || start > end {
@@ -396,11 +396,11 @@ impl<'v> Evaluator<'v> {
                     .to_string();
                 let start = args
                     .get(1)
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("start must be a number"))? as usize;
                 let len = args
                     .get(2)
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("length must be a number"))? as usize;
                 let chars = s.chars().collect::<Vec<_>>();
                 let start = start.min(chars.len());
@@ -423,7 +423,7 @@ impl<'v> Evaluator<'v> {
                     .to_string();
                 let target = args
                     .get(1)
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("length must be a number"))? as usize;
                 let ch = args
                     .get(2)
@@ -440,7 +440,7 @@ impl<'v> Evaluator<'v> {
                     .to_string();
                 let target = args
                     .get(1)
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("length must be a number"))? as usize;
                 let ch = args
                     .get(2)
@@ -451,7 +451,7 @@ impl<'v> Evaluator<'v> {
                 Ok(Value::Str(format!("{s}{padding}").into()))
             }
             "concat" => {
-                let parts = args.iter().map(|v| v.to_string()).collect::<Vec<_>>();
+                let parts = args.iter().map(std::string::ToString::to_string).collect::<Vec<_>>();
                 Ok(Value::Str(parts.join("").into()))
             }
             "title" => {
@@ -472,14 +472,14 @@ impl<'v> Evaluator<'v> {
                 Ok(Value::Str(result.into()))
             }
             "join" => {
-                let sep = args.get(1).map(|v| v.to_string()).unwrap_or_default();
+                let sep = args.get(1).map(std::string::ToString::to_string).unwrap_or_default();
                 let parts = match args.first() {
                     Some(Value::List(items)) => items
                         .iter()
-                        .map(|v| v.to_string())
+                        .map(std::string::ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(&sep),
-                    v => v.map(|v| v.to_string()).unwrap_or_default(),
+                    v => v.map(std::string::ToString::to_string).unwrap_or_default(),
                 };
                 Ok(Value::Str(parts.into()))
             }
@@ -501,28 +501,28 @@ impl<'v> Evaluator<'v> {
             "floor" => {
                 let n = args
                     .first()
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("floor requires a number"))?;
                 Ok(Value::Num(n.floor()))
             }
             "ceil" | "ceiling" => {
                 let n = args
                     .first()
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("ceil requires a number"))?;
                 Ok(Value::Num(n.ceil()))
             }
             "round" => {
                 let n = args
                     .first()
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("round requires a number"))?;
                 Ok(Value::Num(n.round()))
             }
             "abs" => {
                 let n = args
                     .first()
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("abs requires a number"))?;
                 Ok(Value::Num(n.abs()))
             }
@@ -698,8 +698,8 @@ impl<'v> Evaluator<'v> {
                 let Value::List(items) = args.first().ok_or(Cow::Borrowed("join_list requires a list"))? else {
                     return Err("join_list requires a list".into());
                 };
-                let sep = args.get(1).map(|v| v.to_string()).unwrap_or_default();
-                let result = items.iter().map(|v| v.to_string()).collect::<Vec<_>>();
+                let sep = args.get(1).map(std::string::ToString::to_string).unwrap_or_default();
+                let result = items.iter().map(std::string::ToString::to_string).collect::<Vec<_>>();
                 Ok(Value::Str(result.join(&sep).into()))
             }
             _ => Err(format!("Unknown list function: {name}").into()),
@@ -729,7 +729,7 @@ impl<'v> Evaluator<'v> {
                     .to_string();
                 let days = args
                     .get(1)
-                    .and_then(|v| v.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("days must be a number"))? as i64;
                 match chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
                     Ok(dt) => Ok(Value::Str(

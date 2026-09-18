@@ -95,7 +95,7 @@ tauri_reexport! {
             }
             let mut packages = vec![];
             if let Ok(entries) = fs::read_dir(&self.packages_dir) {
-                for entry in entries.filter_map(|e| e.ok()) {
+                for entry in entries.filter_map(Result::ok) {
                     let path = entry.path();
                     if !path.is_dir() {
                         continue;
