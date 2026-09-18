@@ -60,8 +60,8 @@ fn enable_autostart() {
     let mut key = null_mut();
 
     unsafe {
-        if RegCreateKeyExA(HKEY_CURRENT_USER, cr"Software\Microsoft\Windows\CurrentVersion\Run".as_ptr() as _, 0, 0 as _, 0, KEY_SET_VALUE, 0 as _, &mut key as _, 0 as _) == ERROR_SUCCESS {
-            RegSetValueExA(key, c"trigr".as_ptr() as _, 0, REG_SZ, exe_cstr.as_ptr() as _, (exe_cstr.count_bytes() + 1) as _);
+        if RegCreateKeyExA(HKEY_CURRENT_USER, cr"Software\Microsoft\Windows\CurrentVersion\Run".as_ptr().cast(), 0, 0 as _, 0, KEY_SET_VALUE, 0 as _, &mut key as _, 0 as _) == ERROR_SUCCESS {
+            RegSetValueExA(key, c"trigr".as_ptr().cast(), 0, REG_SZ, exe_cstr.as_ptr().cast(), (exe_cstr.count_bytes() + 1) as _);
             RegCloseKey(key);
         }
     }
