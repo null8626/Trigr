@@ -216,7 +216,7 @@ fn check_and_expand(
 
         if buffer_to_check.ends_with(&trigger.trigger_text) {
             let backspace_count =
-                trigger.trigger_text.chars().count() + if is_separator { 1 } else { 0 };
+                trigger.trigger_text.chars().count() + usize::from(is_separator);
 
             let resolved = manager.resolve_replacement(trigger);
 
