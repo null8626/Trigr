@@ -27,12 +27,10 @@ pub fn evaluate_with_args(source: &str, context: &HashMap<String, String>, args:
     for (key, value) in context {
         evaluator.env.insert(key.as_str().into(), if key == "_args_len" {
             Value::Str(value.as_str().into())
+        } else if let Ok(n) = value.parse::<f64>() {
+            Value::Num(n)
         } else {
-            if let Ok(n) = value.parse::<f64>() {
-                Value::Num(n)
-            } else {
-                Value::Str(value.as_str().into())
-            }
+            Value::Str(value.as_str().into())
         });
     }
 
@@ -88,10 +86,9 @@ pub fn resolve_template(template: &str, context: &HashMap<String, String>) -> Re
                     } else {
                         brace_depth -= 1;
                     }
-                    var_content.push(ch);
-                } else {
-                    var_content.push(ch);
                 }
+
+                var_content.push(ch);
             }
         }
 

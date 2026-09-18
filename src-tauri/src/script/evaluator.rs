@@ -613,7 +613,7 @@ impl<'v> Evaluator<'v> {
                     .chars()
                     .last()
                     .map(|c| Value::Str(c.to_string().into()))
-                    .ok_or("Empty string".into()),
+                    .ok_or_else(|| "Empty string".into()),
                 _ => Err("last requires a list or string".into()),
             },
             "map" => {
@@ -711,15 +711,13 @@ impl<'v> Evaluator<'v> {
             "now" => {
                 let fmt = args
                     .first()
-                    .map(|v| Cow::Owned(v.to_string()))
-                    .unwrap_or(Cow::Borrowed("%Y-%m-%d %H:%M:%S"));
+                    .map_or(Cow::Borrowed("%Y-%m-%d %H:%M:%S"), |v| Cow::Owned(v.to_string()));
                 Ok(Value::Str(chrono::Local::now().format(&fmt).to_string().into()))
             }
             "today" => {
                 let fmt = args
                     .first()
-                    .map(|v| Cow::Owned(v.to_string()))
-                    .unwrap_or(Cow::Borrowed("%Y-%m-%d"));
+                    .map_or(Cow::Borrowed("%Y-%m-%d"), |v| Cow::Owned(v.to_string()));
                 Ok(Value::Str(chrono::Local::now().format(&fmt).to_string().into()))
             }
             "date_add" => {
@@ -754,10 +752,8 @@ impl<'v> Evaluator<'v> {
                     .get(1)
                     .ok_or(Cow::Borrowed("date_format requires a format string"))?
                     .to_string();
-                match chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
-                    Ok(dt) => Ok(Value::Str(dt.format(&fmt).to_string().into())),
-                    Err(_) => Err(format!("Cannot parse date: {s}").into()),
-                }
+
+                chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_or_else(|_| Err(format!("Cannot parse date: {s}").into()), |dt| Ok(Value::Str(dt.format(&fmt).to_string().into())))
             }
             _ => Err(format!("Unknown date function: {name}").into()),
         }

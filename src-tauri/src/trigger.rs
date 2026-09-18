@@ -354,10 +354,7 @@ fn evaluate_script_with_args(
     }
     ctx.insert("_args_len".to_string(), args.len().to_string());
 
-    match crate::script::evaluate_with_args(script, &ctx, args) {
-        Ok(val) => val,
-        Err(_) => "{{script error}}".to_string(),
-    }
+    crate::script::evaluate_with_args(script, &ctx, args).unwrap_or_else(|_| "{{script error}}".to_string())
 }
 
 const DATE_REPLACEMENTS: [(&str, &str); 11] = [
