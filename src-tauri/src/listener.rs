@@ -244,7 +244,7 @@ fn strip_last_word(buf: &mut String) {
     }
 }
 
-fn is_punct(c: char) -> bool {
+const fn is_punct(c: char) -> bool {
     c.is_ascii_punctuation()
 }
 

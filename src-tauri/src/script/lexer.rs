@@ -234,7 +234,7 @@ impl Lexer {
         }
     }
 
-    fn is_at_end(&self) -> bool {
+    const fn is_at_end(&self) -> bool {
         self.pos >= self.source.len()
     }
 
