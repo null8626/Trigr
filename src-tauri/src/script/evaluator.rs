@@ -544,15 +544,15 @@ impl<'v> Evaluator<'v> {
             "clamp" => {
                 let v = args
                     .first()
-                    .and_then(|a| a.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("clamp requires numbers"))?;
                 let lo = args
                     .get(1)
-                    .and_then(|a| a.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("clamp requires numbers"))?;
                 let hi = args
                     .get(2)
-                    .and_then(|a| a.as_num())
+                    .and_then(Value::as_num)
                     .ok_or(Cow::Borrowed("clamp requires numbers"))?;
                 Ok(Value::Num(v.clamp(lo, hi)))
             }
@@ -691,7 +691,7 @@ impl<'v> Evaluator<'v> {
                     Some(Value::List(items)) => items.clone(),
                     _ => return Err("sort requires a list".into()),
                 };
-                items.sort_by_key(|x| x.to_string());
+                items.sort_by_key(std::string::ToString::to_string);
                 Ok(Value::List(items))
             }
             "join_list" => {
@@ -775,8 +775,8 @@ impl<'v> Evaluator<'v> {
                     els
                 }.clone())
             }
-            "__builtin_or" => Ok(Value::Bool(args.iter().any(|v| v.as_bool()))),
-            "__builtin_and" => Ok(Value::Bool(args.iter().all(|v| v.as_bool()))),
+            "__builtin_or" => Ok(Value::Bool(args.iter().any(Value::as_bool))),
+            "__builtin_and" => Ok(Value::Bool(args.iter().all(Value::as_bool))),
             _ => Err(format!("Unknown logic function: {name}").into()),
         }
     }
