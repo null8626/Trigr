@@ -86,8 +86,8 @@ pub enum Value<'v> {
     Str(Cow<'v, str>),
     Bool(bool),
     Nil,
-    List(Vec<Value<'v>>),
-    Map(HashMap<Cow<'v, str>, Value<'v>>),
+    List(Vec<Self>),
+    Map(HashMap<Cow<'v, str>, Self>),
     Fn {
         params: Vec<Cow<'v, str>>,
         body: Box<Expr<'v>>,
